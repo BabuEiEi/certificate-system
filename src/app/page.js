@@ -45,7 +45,7 @@ export default function HomePage() {
             <div className="mt-10 rounded-3xl border border-white/80 bg-white/90 p-4 text-left shadow-2xl shadow-slate-900/10 backdrop-blur sm:p-6">
               <SearchForm />
               <p className="mt-4 text-center text-xs text-slate-400">
-                ระบบจะแสดงผลเมื่อเชื่อมต่อฐานข้อมูลเกียรติบัตรแล้ว
+                ระบบแสดงเฉพาะเกียรติบัตรที่เผยแพร่ในทะเบียนสาธารณะ
               </p>
             </div>
           </div>

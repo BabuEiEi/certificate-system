@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { joinClassNames } from "@/lib/utils";
+import { logoutAction } from "@/app/login/actions";
 
 const navigation = [
   { href: "/admin/dashboard", label: "Dashboard", mark: "D" },
@@ -17,7 +18,7 @@ const navigation = [
   { href: "/admin/settings", label: "Settings", mark: "S" },
 ];
 
-export default function AdminShell({ children }) {
+export default function AdminShell({ children, user }) {
   const pathname = usePathname();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
@@ -115,18 +116,22 @@ export default function AdminShell({ children }) {
           </div>
           <div className="ml-auto flex shrink-0 items-center gap-3">
             <div className="hidden text-right sm:block">
-              <p className="text-xs font-semibold text-slate-600">ผู้ใช้งาน</p>
-              <p className="text-[11px] text-slate-400">รอระบบยืนยันตัวตน</p>
+              <p className="max-w-44 truncate text-xs font-semibold text-slate-600">
+                {user.displayName}
+              </p>
+              <p className="max-w-44 truncate text-[11px] text-slate-400">
+                {user.email || user.role}
+              </p>
             </div>
-            <button
-              type="button"
-              aria-disabled="true"
-              title="ระบบออกจากระบบจะเปิดใช้งานพร้อม Authentication"
-              className="shrink-0 rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-400"
-            >
-              <span className="sm:hidden">ออก</span>
-              <span className="hidden sm:inline">Logout</span>
-            </button>
+            <form action={logoutAction}>
+              <button
+                type="submit"
+                className="shrink-0 rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 transition hover:border-rose-200 hover:bg-rose-50 hover:text-rose-700"
+              >
+                <span className="sm:hidden">ออก</span>
+                <span className="hidden sm:inline">Logout</span>
+              </button>
+            </form>
           </div>
         </header>
         <main className="p-5 sm:p-8 lg:p-10">{children}</main>

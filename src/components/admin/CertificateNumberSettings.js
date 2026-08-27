@@ -85,7 +85,7 @@ export default function CertificateNumberSettings() {
 
         <div className="mt-7 flex justify-end border-t border-slate-100 pt-5">
           <button type="button" disabled className="rounded-xl bg-slate-200 px-5 py-2.5 text-sm font-semibold text-slate-500">
-            บันทึกหลังเชื่อมต่อฐานข้อมูล
+            บันทึกใน Phase 2B
           </button>
         </div>
       </form>
