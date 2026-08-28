@@ -13,7 +13,7 @@ export default function AdminSectionPage({ title, description }) {
       <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-10 text-center shadow-sm">
         <div className="mx-auto mb-3 h-2 w-12 rounded-full bg-gold" />
         <p className="text-sm text-slate-500">
-          ส่วนจัดการข้อมูลจะเปิดใช้งานใน Phase 2B บนฐานข้อมูลและ RLS ที่เตรียมไว้แล้ว
+          ส่วนจัดการข้อมูลนี้อยู่ในลำดับพัฒนาถัดไป โดยจะเชื่อมกับ Cloud Firestore ผ่านโค้ดฝั่งเซิร์ฟเวอร์
         </p>
       </div>
     </section>

@@ -1,10 +1,13 @@
 import CertificateNumberSettings from "@/components/admin/CertificateNumberSettings";
+import { getCertificateSettings } from "@/lib/data/settings";
 
 export const metadata = {
   title: "Settings",
 };
 
-export default function SettingsPage() {
+export default async function SettingsPage() {
+  const settings = await getCertificateSettings();
+
   return (
     <section>
       <div className="mb-8">
@@ -12,7 +15,7 @@ export default function SettingsPage() {
         <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">Settings</h1>
         <p className="mt-2 text-sm text-slate-500">ตั้งค่ารูปแบบและการทำงานของระบบเกียรติบัตร</p>
       </div>
-      <CertificateNumberSettings />
+      <CertificateNumberSettings initialSettings={settings} />
     </section>
   );
 }
