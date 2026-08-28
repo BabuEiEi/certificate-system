@@ -18,6 +18,14 @@ function textCell(value) {
   return { value: String(value ?? ""), type: String, alignVertical: "center" };
 }
 
+function wrappedTextCell(value, overrides = {}) {
+  return {
+    ...textCell(value),
+    wrap: true,
+    ...overrides,
+  };
+}
+
 function sanitizeFileName(value) {
   return String(value ?? "")
     .normalize("NFKC")
@@ -35,20 +43,131 @@ async function saveWorkbook(data, options, fileName) {
   }).toFile(fileName);
 }
 
+async function saveMultiSheetWorkbook(sheets, fileName) {
+  const { default: writeExcelFile } = await import("write-excel-file/browser");
+  await writeExcelFile(sheets, {
+    fontFamily: "Tahoma",
+    fontSize: 11,
+  }).toFile(fileName);
+}
+
 export async function downloadParticipantExcelTemplate() {
-  const data = [
-    [header("ชื่อ-นามสกุล"), header("ประเภท")],
-    [textCell("นายตัวอย่าง ผ่านอบรม"), textCell("ผ่านการอบรม")],
-    [textCell("นางสาวตัวอย่าง เข้าร่วม"), textCell("เข้าร่วม")],
+  const participantData = [
+    [
+      header("ชื่อ-นามสกุล"),
+      header("ประเภท"),
+      header("อีเมล"),
+      header("รหัสผู้รับ"),
+      header("หน่วยงาน / สถานศึกษา"),
+      header("สถานะสิทธิ์"),
+    ],
+    [
+      textCell("นายตัวอย่าง ผ่านอบรม"),
+      textCell("ผ่านการอบรม"),
+      textCell("example@example.com"),
+      textCell("REC-001"),
+      textCell("โรงเรียนตัวอย่าง"),
+      textCell("มีสิทธิ์รับเกียรติบัตร"),
+    ],
+    [
+      textCell("นางสาวตัวอย่าง เข้าร่วม"),
+      textCell("เข้าร่วม"),
+      textCell(""),
+      textCell(""),
+      textCell(""),
+      textCell("มีสิทธิ์รับเกียรติบัตร"),
+    ],
   ];
 
-  await saveWorkbook(
-    data,
-    {
-      sheet: "รายชื่อผู้รับ",
-      columns: [{ width: 38 }, { width: 22 }],
-      stickyRowsCount: 1,
-    },
+  const descriptionData = [
+    [
+      wrappedTextCell("คำอธิบายหัวตารางสำหรับนำเข้ารายชื่อผู้รับเกียรติบัตร", {
+        columnSpan: 4,
+        fontWeight: "bold",
+        fontSize: 14,
+        textColor: "#123F63",
+      }),
+      null,
+      null,
+      null,
+    ],
+    [
+      wrappedTextCell("ต้องระบุข้อมูลเฉพาะ ‘ชื่อ-นามสกุล’ และ ‘ประเภท’ ส่วนคอลัมน์อื่นไม่บังคับ", {
+        columnSpan: 4,
+        textColor: "#92400E",
+        backgroundColor: "#FFFBEB",
+      }),
+      null,
+      null,
+      null,
+    ],
+    [null, null, null, null],
+    [header("หัวตาราง"), header("จำเป็น"), header("คำอธิบาย"), header("ค่าที่รองรับ / ตัวอย่าง")],
+    [
+      textCell("ชื่อ-นามสกุล"),
+      wrappedTextCell("จำเป็น", { fontWeight: "bold", textColor: "#B91C1C" }),
+      wrappedTextCell("ชื่อและนามสกุลของผู้รับเกียรติบัตร"),
+      wrappedTextCell("นายสมชาย ใจดี"),
+    ],
+    [
+      textCell("ประเภท"),
+      wrappedTextCell("จำเป็น", { fontWeight: "bold", textColor: "#B91C1C" }),
+      wrappedTextCell("ประเภทข้อความที่จะใช้กับเกียรติบัตร"),
+      wrappedTextCell("ผ่านการอบรม หรือ เข้าร่วม"),
+    ],
+    [
+      textCell("อีเมล"),
+      textCell("ไม่บังคับ"),
+      wrappedTextCell("อีเมลของผู้รับ หากระบุต้องเป็นรูปแบบอีเมลที่ถูกต้องและไม่ซ้ำในกิจกรรม"),
+      wrappedTextCell("example@example.com"),
+    ],
+    [
+      textCell("รหัสผู้รับ"),
+      textCell("ไม่บังคับ"),
+      wrappedTextCell("รหัสประจำตัวผู้รับ หากระบุต้องไม่ซ้ำในกิจกรรม"),
+      wrappedTextCell("REC-001"),
+    ],
+    [
+      textCell("หน่วยงาน / สถานศึกษา"),
+      textCell("ไม่บังคับ"),
+      wrappedTextCell("ชื่อหน่วยงาน โรงเรียน หรือสถานศึกษาของผู้รับ"),
+      wrappedTextCell("โรงเรียนตัวอย่าง"),
+    ],
+    [
+      textCell("สถานะสิทธิ์"),
+      textCell("ไม่บังคับ"),
+      wrappedTextCell("สถานะสิทธิ์ในการรับเกียรติบัตร หากเว้นว่างระบบจะกำหนดเป็นมีสิทธิ์"),
+      wrappedTextCell("มีสิทธิ์รับเกียรติบัตร หรือ ระงับสิทธิ์"),
+    ],
+  ];
+
+  await saveMultiSheetWorkbook(
+    [
+      {
+        data: participantData,
+        sheet: "รายชื่อผู้รับ",
+        columns: [
+          { width: 38 },
+          { width: 22 },
+          { width: 32 },
+          { width: 18 },
+          { width: 34 },
+          { width: 24 },
+        ],
+        stickyRowsCount: 1,
+      },
+      {
+        data: descriptionData,
+        sheet: "คำอธิบายหัวตาราง",
+        columns: [
+          { width: 28 },
+          { width: 14 },
+          { width: 54 },
+          { width: 40 },
+        ],
+        stickyRowsCount: 4,
+      },
+    ],
     "participant-import-template.xlsx",
   );
 }

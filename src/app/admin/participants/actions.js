@@ -33,7 +33,11 @@ const participantSchema = z.object({
   status: z.enum(["ELIGIBLE", "EXCLUDED"], { message: "สถานะผู้รับไม่ถูกต้อง" }),
 });
 
-const importSchema = z.array(participantSchema).min(1).max(200);
+const importParticipantSchema = participantSchema.extend({
+  certificateType: z.enum(["PASSED_TRAINING", "PARTICIPATED"]),
+});
+
+const importSchema = z.array(importParticipantSchema).min(1).max(200);
 
 function parseParticipantForm(formData) {
   return participantSchema.safeParse({

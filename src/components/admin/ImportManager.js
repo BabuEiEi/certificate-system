@@ -36,7 +36,15 @@ const headerAliases = {
   firstName: ["firstname", "first name", "ชื่อ"],
   lastName: ["lastname", "last name", "นามสกุล"],
   email: ["email", "e-mail", "อีเมล"],
-  organization: ["organization", "school", "department", "หน่วยงาน", "สถานศึกษา", "โรงเรียน"],
+  organization: [
+    "organization",
+    "school",
+    "department",
+    "หน่วยงาน",
+    "สถานศึกษา",
+    "โรงเรียน",
+    "หน่วยงาน / สถานศึกษา",
+  ],
   recipientCode: ["recipientcode", "recipient code", "code", "รหัสผู้รับ", "รหัส", "รหัสประจำตัว"],
   certificateType: [
     "certificatetype",
@@ -88,6 +96,12 @@ function parseParticipantRows(sourceRows) {
       fileError: "ไม่พบคอลัมน์ชื่อ กรุณาใช้ ‘ชื่อ-นามสกุล’ หรือคอลัมน์ ‘ชื่อ’ และ ‘นามสกุล’",
     };
   }
+  if (columns.certificateType < 0) {
+    return {
+      rows: [],
+      fileError: "ไม่พบคอลัมน์ ‘ประเภท’ ซึ่งเป็นข้อมูลบังคับ กรุณาดาวน์โหลด Excel Template ล่าสุด",
+    };
+  }
 
   const rows = sourceRows.slice(1).flatMap((sourceRow, index) => {
     if (!sourceRow.some((value) => cellText(value))) return [];
@@ -98,7 +112,8 @@ function parseParticipantRows(sourceRows) {
       : [valueAt(columns.prefix), valueAt(columns.firstName), valueAt(columns.lastName)]
           .filter(Boolean)
           .join(" ");
-    const certificateType = parseCertificateType(valueAt(columns.certificateType));
+    const certificateTypeText = valueAt(columns.certificateType);
+    const certificateType = parseCertificateType(certificateTypeText);
     const status = parseParticipantStatus(valueAt(columns.status));
     const row = {
       sourceRow: index + 2,
@@ -120,7 +135,11 @@ function parseParticipantRows(sourceRows) {
     if (row.email.length > 254) row.errors.push("อีเมลยาวเกินไป");
     if (row.organization.length > 160) row.errors.push("ชื่อหน่วยงานยาวเกินไป");
     if (row.recipientCode.length > 80) row.errors.push("รหัสผู้รับยาวเกินไป");
-    if (certificateType.error) row.errors.push(certificateType.error);
+    if (!certificateTypeText || !certificateType.value) {
+      row.errors.push("ประเภทต้องเป็น ‘ผ่านการอบรม’ หรือ ‘เข้าร่วม’");
+    } else if (certificateType.error) {
+      row.errors.push(certificateType.error);
+    }
     if (status.error) row.errors.push(status.error);
     return [row];
   });
@@ -319,9 +338,9 @@ export default function ImportManager({
         </div>
 
         <div className="mt-5 rounded-xl bg-slate-50 p-4 text-xs leading-6 text-slate-500">
-          ใช้เพียง <strong className="text-slate-700">ชื่อ-นามสกุล</strong> (บังคับ) และ
-          <strong className="text-slate-700"> ประเภท</strong> (ไม่บังคับ) หากใช้ Template เดียวกับผู้รับหลายประเภท
-          ส่วนอีเมล หน่วยงาน และรหัสผู้รับยังรองรับเป็นคอลัมน์เพิ่มเติม
+          ต้องระบุ <strong className="text-slate-700">ชื่อ-นามสกุล</strong> และ
+          <strong className="text-slate-700"> ประเภท</strong> โดยประเภทต้องเป็น “ผ่านการอบรม” หรือ “เข้าร่วม”
+          ส่วนอีเมล รหัสผู้รับ หน่วยงาน / สถานศึกษา และสถานะสิทธิ์เป็นข้อมูลเสริม
         </div>
         {parsing ? <p className="mt-4 text-sm font-semibold text-brand">กำลังอ่านและตรวจไฟล์...</p> : null}
         {fileError ? (
