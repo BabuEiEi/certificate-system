@@ -9,6 +9,9 @@ const actionLabels = {
   PARTICIPANT_UPDATED: "แก้ไขผู้รับเกียรติบัตร",
   PARTICIPANT_DELETED: "ลบผู้รับเกียรติบัตร",
   PARTICIPANTS_IMPORTED: "นำเข้ารายชื่อผู้รับ",
+  SIGNER_CREATED: "เพิ่มผู้ลงนาม",
+  SIGNER_UPDATED: "แก้ไขผู้ลงนาม",
+  SIGNER_DELETED: "ลบผู้ลงนาม",
   SETTINGS_UPDATED: "แก้ไขการตั้งค่าเลขเกียรติบัตร",
 };
 

@@ -1,10 +1,19 @@
 import SignersManager from "@/components/admin/SignersManager";
+import { getEvents } from "@/lib/data/events";
+import { getSigners } from "@/lib/data/signers";
 
 export const metadata = {
   title: "ผู้ลงนาม",
 };
 
-export default function SignersPage() {
+export default async function SignersPage({ searchParams }) {
+  const events = await getEvents();
+  const query = await searchParams;
+  const selectedEventId = events.some((event) => event.id === query.event)
+    ? query.event
+    : events[0]?.id ?? "";
+  const signers = await getSigners(selectedEventId);
+
   return (
     <section>
       <div className="mb-8">
@@ -14,7 +23,11 @@ export default function SignersPage() {
           เตรียมข้อมูลผู้ลงนามและภาพลายเซ็นได้สูงสุด 3 คนต่อกิจกรรม
         </p>
       </div>
-      <SignersManager />
+      <SignersManager
+        events={events}
+        signers={signers}
+        selectedEventId={selectedEventId}
+      />
     </section>
   );
 }

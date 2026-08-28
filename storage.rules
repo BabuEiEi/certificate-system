@@ -2,8 +2,9 @@ rules_version = '2';
 
 service firebase.storage {
   match /b/{bucket}/o {
-    // Files are managed by authorized Next.js server code. No direct browser
-    // access is enabled until upload/download routes are implemented.
+    // Signature files are uploaded by authorized Next.js Server Actions and
+    // streamed through an authenticated admin route. Direct browser access to
+    // every Storage object remains denied.
     match /{allPaths=**} {
       allow read, write: if false;
     }
