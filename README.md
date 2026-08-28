@@ -61,6 +61,14 @@ updated_at: <server timestamp>
 
 เอกสาร `publishedCertificates` ต้องมี `search_terms` ซึ่งสร้างได้ด้วย `createSearchTerms()` ใน `src/lib/firebase/search.js` เพื่อรองรับการค้นหาชื่อและเลขที่เกียรติบัตร
 
+## ระบบจัดการกิจกรรมและการตั้งค่า
+
+- เมนู **กิจกรรม** รองรับการสร้าง แก้ไข และกำหนดสถานะ `DRAFT`, `ACTIVE`, `CLOSED`
+- ทุกการสร้างหรือแก้ไขกิจกรรมบันทึกผู้ดำเนินการและเวลาจากเซิร์ฟเวอร์
+- เมนู **Settings** บันทึกรูปแบบเลขเกียรติบัตรที่ `certificateSettings/default`
+- การเปลี่ยนแปลงกิจกรรมและ Settings บันทึกใน `auditLogs` ด้วย transaction/batch เดียวกับข้อมูลหลัก
+- Server Actions ตรวจ session, สิทธิ์ `ADMIN` และข้อมูลด้วย Zod ทุกครั้งก่อนเขียน Firestore
+
 ## Security Rules และ Indexes
 
 แอปอ่านเขียน Firestore/Storage ผ่าน Next.js server และ Firebase Admin SDK เท่านั้น ดังนั้น client rules ปฏิเสธทุกคำขอโดยค่าเริ่มต้น
