@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import LoginForm from "@/components/admin/LoginForm";
 import { getAdminUser } from "@/lib/auth";
-import { isSupabaseConfigured } from "@/lib/supabase/config";
+import { isFirebaseConfigured } from "@/lib/firebase/config";
 
 export const metadata = {
   title: "เข้าสู่ระบบผู้ดูแล",
@@ -11,7 +11,7 @@ export const metadata = {
 const errorMessages = {
   "authentication-required": "กรุณาเข้าสู่ระบบก่อนใช้งานส่วนผู้ดูแล",
   "not-authorized": "บัญชีนี้ยังไม่ได้รับสิทธิ์ผู้ดูแลระบบ",
-  "not-configured": "ยังไม่ได้ตั้งค่า Supabase สำหรับโปรเจกต์นี้",
+  "not-configured": "ยังไม่ได้ตั้งค่า Firebase สำหรับโปรเจกต์นี้",
 };
 
 export const dynamic = "force-dynamic";
@@ -23,7 +23,7 @@ export default async function LoginPage({ searchParams }) {
   const { error = "" } = await searchParams;
   const errorCode = Array.isArray(error) ? error[0] : error;
   const externalError = errorMessages[errorCode] ?? "";
-  const configured = isSupabaseConfigured();
+  const configured = isFirebaseConfigured();
 
   return (
     <main className="grid min-h-screen place-items-center bg-slate-100 px-5 py-12">

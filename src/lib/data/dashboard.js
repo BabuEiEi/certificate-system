@@ -1,6 +1,6 @@
 import "server-only";
 
-import { createClient } from "@/lib/supabase/server";
+import { getFirebaseAdminDb } from "@/lib/firebase/admin";
 
 const metrics = [
   ["events", "events"],
@@ -8,28 +8,30 @@ const metrics = [
   ["certificates", "certificates"],
 ];
 
-async function countRows(supabase, table, filters = []) {
-  let query = supabase.from(table).select("*", { count: "exact", head: true });
+async function countDocuments(db, collectionName, filters = []) {
+  let query = db.collection(collectionName);
 
-  filters.forEach(([column, value]) => {
-    query = query.eq(column, value);
+  filters.forEach(([field, value]) => {
+    query = query.where(field, "==", value);
   });
 
-  const { count, error } = await query;
-  if (error) throw error;
-  return count ?? 0;
+  const snapshot = await query.count().get();
+  return snapshot.data().count;
 }
 
 export async function getDashboardStats() {
-  const supabase = await createClient();
+  const db = getFirebaseAdminDb();
 
   const baseCounts = await Promise.all(
-    metrics.map(async ([key, table]) => [key, await countRows(supabase, table)]),
+    metrics.map(async ([key, collectionName]) => [
+      key,
+      await countDocuments(db, collectionName),
+    ]),
   );
 
   const [published, revoked] = await Promise.all([
-    countRows(supabase, "certificates", [["status", "PUBLISHED"]]),
-    countRows(supabase, "certificates", [["status", "REVOKED"]]),
+    countDocuments(db, "certificates", [["status", "PUBLISHED"]]),
+    countDocuments(db, "certificates", [["status", "REVOKED"]]),
   ]);
 
   return {

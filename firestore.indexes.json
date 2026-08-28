@@ -1,0 +1,19 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "publishedCertificates",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "search_terms",
+          "arrayConfig": "CONTAINS"
+        },
+        {
+          "fieldPath": "issued_at",
+          "order": "DESCENDING"
+        }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

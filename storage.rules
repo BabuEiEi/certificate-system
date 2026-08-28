@@ -1,0 +1,11 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Files are managed by authorized Next.js server code. No direct browser
+    // access is enabled until upload/download routes are implemented.
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

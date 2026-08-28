@@ -1,16 +1,71 @@
 "use client";
 
-import { useActionState } from "react";
-import { loginAction } from "@/app/login/actions";
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import {
+  inMemoryPersistence,
+  setPersistence,
+  signInWithEmailAndPassword,
+  signOut,
+} from "firebase/auth";
+import { getFirebaseClientAuth } from "@/lib/firebase/client";
 
-const initialState = { error: "" };
+function getLoginErrorMessage(error) {
+  if (error?.code === "auth/too-many-requests") {
+    return "มีการลองเข้าสู่ระบบหลายครั้งเกินไป กรุณารอสักครู่";
+  }
+
+  if (error?.code === "auth/configuration-not-found") {
+    return "ยังไม่ได้เปิด Email/Password ใน Firebase Authentication";
+  }
+
+  return "อีเมลหรือรหัสผ่านไม่ถูกต้อง";
+}
 
 export default function LoginForm({ configured, externalError = "" }) {
-  const [state, formAction, pending] = useActionState(loginAction, initialState);
-  const error = state?.error || externalError;
+  const router = useRouter();
+  const [error, setError] = useState(externalError);
+  const [pending, setPending] = useState(false);
+
+  async function handleSubmit(event) {
+    event.preventDefault();
+    setError("");
+    setPending(true);
+
+    const formData = new FormData(event.currentTarget);
+    const email = String(formData.get("email") ?? "").trim();
+    const password = String(formData.get("password") ?? "");
+
+    try {
+      const auth = getFirebaseClientAuth();
+      await setPersistence(auth, inMemoryPersistence);
+      const credential = await signInWithEmailAndPassword(auth, email, password);
+      const idToken = await credential.user.getIdToken();
+      const response = await fetch("/api/auth/session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ idToken }),
+      });
+      const result = await response.json();
+
+      await signOut(auth);
+
+      if (!response.ok) {
+        setError(result.error || "ไม่สามารถเข้าสู่ระบบได้");
+        return;
+      }
+
+      router.replace("/admin/dashboard");
+      router.refresh();
+    } catch (loginError) {
+      setError(getLoginErrorMessage(loginError));
+    } finally {
+      setPending(false);
+    }
+  }
 
   return (
-    <form action={formAction} className="mt-8 space-y-5">
+    <form onSubmit={handleSubmit} className="mt-8 space-y-5">
       {error ? (
         <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
           {error}
@@ -48,7 +103,7 @@ export default function LoginForm({ configured, externalError = "" }) {
         disabled={!configured || pending}
         className="h-12 w-full rounded-xl bg-brand font-semibold text-white transition hover:bg-brand-dark disabled:bg-slate-200 disabled:text-slate-500"
       >
-        {pending ? "กำลังตรวจสอบ…" : configured ? "เข้าสู่ระบบ" : "รอการตั้งค่า Supabase"}
+        {pending ? "กำลังตรวจสอบ…" : configured ? "เข้าสู่ระบบ" : "รอการตั้งค่า Firebase"}
       </button>
     </form>
   );

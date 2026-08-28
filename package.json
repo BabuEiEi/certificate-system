@@ -7,14 +7,12 @@
     "build": "next build --webpack",
     "start": "next start",
     "lint": "eslint",
-    "supabase:start": "supabase start",
-    "supabase:stop": "supabase stop",
-    "db:reset": "supabase db reset",
-    "db:test": "supabase test db"
+    "firebase:emulators": "firebase emulators:start --project certificate-system-th-2026",
+    "firebase:deploy:rules": "firebase deploy --only firestore:rules,firestore:indexes --project certificate-system-th-2026"
   },
   "dependencies": {
-    "@supabase/ssr": "0.12.5",
-    "@supabase/supabase-js": "2.112.4",
+    "firebase": "12.18.0",
+    "firebase-admin": "14.3.0",
     "next": "16.3.3",
     "react": "19.2.8",
     "react-dom": "19.2.8",
@@ -24,7 +22,7 @@
     "@tailwindcss/postcss": "^4",
     "eslint": "^9",
     "eslint-config-next": "16.3.3",
-    "supabase": "2.116.0",
+    "firebase-tools": "15.24.0",
     "tailwindcss": "^4"
   }
 }

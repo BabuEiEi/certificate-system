@@ -37,7 +37,7 @@ export default async function DashboardPage() {
               <span className={`rounded-lg px-2.5 py-1 text-xs font-semibold ${kpi.tone}`}>KPI</span>
             </div>
             <p className="mt-5 border-t border-slate-100 pt-4 text-xs text-slate-400">
-              อัปเดตจากฐานข้อมูล Supabase
+              อัปเดตจากฐานข้อมูล Cloud Firestore
             </p>
           </article>
         ))}

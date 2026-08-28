@@ -1,3 +1,0 @@
--- Production data is intentionally not seeded.
--- Create users through Supabase Auth, then promote the first trusted user with:
--- update public.profiles set role = 'ADMIN' where id = '<auth-user-uuid>';
