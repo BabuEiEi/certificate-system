@@ -11,11 +11,16 @@ const headerStyle = {
 };
 
 function header(value) {
-  return { value, ...headerStyle };
+  return { value, type: String, format: "@", ...headerStyle };
 }
 
 function textCell(value) {
-  return { value: String(value ?? ""), type: String, alignVertical: "center" };
+  return {
+    value: String(value ?? ""),
+    type: String,
+    format: "@",
+    alignVertical: "center",
+  };
 }
 
 function wrappedTextCell(value, overrides = {}) {
@@ -44,10 +49,17 @@ async function saveWorkbook(data, options, fileName) {
 }
 
 async function saveMultiSheetWorkbook(sheets, fileName) {
-  const { default: writeExcelFile } = await import("write-excel-file/browser");
+  const [
+    { default: writeExcelFile },
+    { default: dataValidation },
+  ] = await Promise.all([
+    import("write-excel-file/browser"),
+    import("@onparallel/write-excel-file-data-validation"),
+  ]);
   await writeExcelFile(sheets, {
     fontFamily: "Tahoma",
     fontSize: 11,
+    features: [dataValidation],
   }).toFile(fileName);
 }
 
@@ -67,7 +79,7 @@ export async function downloadParticipantExcelTemplate() {
       textCell("example@example.com"),
       textCell("REC-001"),
       textCell("โรงเรียนตัวอย่าง"),
-      textCell("มีสิทธิ์รับเกียรติบัตร"),
+      textCell("มีสิทธิ์ได้รับเกียรติบัตร"),
     ],
     [
       textCell("นางสาวตัวอย่าง เข้าร่วม"),
@@ -75,8 +87,16 @@ export async function downloadParticipantExcelTemplate() {
       textCell(""),
       textCell(""),
       textCell(""),
-      textCell("มีสิทธิ์รับเกียรติบัตร"),
+      textCell("มีสิทธิ์ได้รับเกียรติบัตร"),
     ],
+    ...Array.from({ length: 198 }, () => [
+      textCell(""),
+      textCell(""),
+      textCell(""),
+      textCell(""),
+      textCell(""),
+      textCell(""),
+    ]),
   ];
 
   const descriptionData = [
@@ -92,7 +112,7 @@ export async function downloadParticipantExcelTemplate() {
       null,
     ],
     [
-      wrappedTextCell("ต้องระบุข้อมูลเฉพาะ ‘ชื่อ-นามสกุล’ และ ‘ประเภท’ ส่วนคอลัมน์อื่นไม่บังคับ", {
+      wrappedTextCell("ทุกคอลัมน์เป็นรูปแบบ Text; ต้องระบุ ‘ชื่อ-นามสกุล’ และ ‘ประเภท’ ส่วนคอลัมน์อื่นไม่บังคับ", {
         columnSpan: 4,
         textColor: "#92400E",
         backgroundColor: "#FFFBEB",
@@ -137,7 +157,7 @@ export async function downloadParticipantExcelTemplate() {
       textCell("สถานะสิทธิ์"),
       textCell("ไม่บังคับ"),
       wrappedTextCell("สถานะสิทธิ์ในการรับเกียรติบัตร หากเว้นว่างระบบจะกำหนดเป็นมีสิทธิ์"),
-      wrappedTextCell("มีสิทธิ์รับเกียรติบัตร หรือ ระงับสิทธิ์"),
+      wrappedTextCell("มีสิทธิ์ได้รับเกียรติบัตร หรือ ระงับสิทธิ์"),
     ],
   ];
 
@@ -155,6 +175,38 @@ export async function downloadParticipantExcelTemplate() {
           { width: 24 },
         ],
         stickyRowsCount: 1,
+        dataValidation: [
+          {
+            cellRange: {
+              from: { row: 2, column: 2 },
+              to: { row: 201, column: 2 },
+            },
+            validation: {
+              type: "list",
+              values: ["ผ่านการอบรม", "เข้าร่วม"],
+              allowBlank: false,
+              inputTitle: "เลือกประเภท",
+              input: "กรุณาเลือกผ่านการอบรมหรือเข้าร่วม",
+              errorTitle: "ประเภทไม่ถูกต้อง",
+              error: "กรุณาเลือกค่าจากรายการที่กำหนด",
+            },
+          },
+          {
+            cellRange: {
+              from: { row: 2, column: 6 },
+              to: { row: 201, column: 6 },
+            },
+            validation: {
+              type: "list",
+              values: ["มีสิทธิ์ได้รับเกียรติบัตร", "ระงับสิทธิ์"],
+              allowBlank: true,
+              inputTitle: "เลือกสถานะสิทธิ์",
+              input: "เว้นว่างได้ โดยระบบจะกำหนดเป็นมีสิทธิ์",
+              errorTitle: "สถานะสิทธิ์ไม่ถูกต้อง",
+              error: "กรุณาเลือกค่าจากรายการที่กำหนด",
+            },
+          },
+        ],
       },
       {
         data: descriptionData,

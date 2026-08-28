@@ -12,6 +12,7 @@
     "firebase:deploy:app": "firebase deploy --only apphosting --project certificate-system-th-2026"
   },
   "dependencies": {
+    "@onparallel/write-excel-file-data-validation": "^1.0.0",
     "firebase": "12.18.0",
     "firebase-admin": "14.3.0",
     "next": "16.3.3",

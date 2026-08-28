@@ -1,5 +1,5 @@
 export const participantStatusOptions = [
-  { value: "ELIGIBLE", label: "มีสิทธิ์รับเกียรติบัตร" },
+  { value: "ELIGIBLE", label: "มีสิทธิ์ได้รับเกียรติบัตร" },
   { value: "EXCLUDED", label: "ระงับสิทธิ์" },
 ];
 
@@ -41,7 +41,7 @@ export function getCertificateTypeLabel(value) {
 
 export function getParticipantStatusLabel(value) {
   return participantStatusOptions.find((option) => option.value === value)?.label
-    ?? "มีสิทธิ์รับเกียรติบัตร";
+    ?? "มีสิทธิ์ได้รับเกียรติบัตร";
 }
 
 export function parseCertificateType(value) {
@@ -86,6 +86,7 @@ export function parseParticipantStatus(value) {
     "eligible",
     "มีสิทธิ์",
     "มีสิทธิ์รับเกียรติบัตร",
+    "มีสิทธิ์ได้รับเกียรติบัตร",
   ]);
   const excludedValues = new Set([
     "excluded",
@@ -98,6 +99,6 @@ export function parseParticipantStatus(value) {
 
   return {
     value: "ELIGIBLE",
-    error: "สถานะต้องเป็น ‘มีสิทธิ์รับเกียรติบัตร’ หรือ ‘ระงับสิทธิ์’ หรือเว้นว่าง",
+    error: "สถานะต้องเป็น ‘มีสิทธิ์ได้รับเกียรติบัตร’ หรือ ‘ระงับสิทธิ์’ หรือเว้นว่าง",
   };
 }
