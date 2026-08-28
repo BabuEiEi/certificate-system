@@ -1,7 +1,7 @@
-import AdminSectionPage from "@/components/admin/AdminSectionPage";
+import { redirect } from "next/navigation";
 
 export const metadata = { title: "Import" };
 
-export default function ImportPage() {
-  return <AdminSectionPage title="Import" description="เตรียมนำเข้ารายชื่อผู้รับเกียรติบัตรจากไฟล์ข้อมูล" />;
+export default async function ImportPage() {
+  redirect("/admin/participants?mode=bulk");
 }

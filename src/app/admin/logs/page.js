@@ -5,6 +5,10 @@ export const metadata = { title: "Logs" };
 const actionLabels = {
   EVENT_CREATED: "สร้างกิจกรรม",
   EVENT_UPDATED: "แก้ไขกิจกรรม",
+  PARTICIPANT_CREATED: "เพิ่มผู้รับเกียรติบัตร",
+  PARTICIPANT_UPDATED: "แก้ไขผู้รับเกียรติบัตร",
+  PARTICIPANT_DELETED: "ลบผู้รับเกียรติบัตร",
+  PARTICIPANTS_IMPORTED: "นำเข้ารายชื่อผู้รับ",
   SETTINGS_UPDATED: "แก้ไขการตั้งค่าเลขเกียรติบัตร",
 };
 
@@ -18,6 +22,13 @@ function formatDateTime(value) {
 }
 
 function describeLog(log) {
+  if (log.action === "PARTICIPANTS_IMPORTED") {
+    const importedCount = Number(log.metadata?.importedCount ?? 0).toLocaleString("th-TH");
+    const skippedCount = Number(log.metadata?.skippedCount ?? 0);
+    return `${log.metadata?.name || "กิจกรรม"}: นำเข้า ${importedCount} รายการ${
+      skippedCount ? `, ข้าม ${skippedCount.toLocaleString("th-TH")} รายการ` : ""
+    }`;
+  }
   if (log.metadata?.name) return log.metadata.name;
   if (log.metadata?.prefix || log.metadata?.year) {
     return `${log.metadata.prefix || ""} ปี ${log.metadata.year || "—"}`.trim();

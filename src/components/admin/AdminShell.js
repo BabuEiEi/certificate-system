@@ -13,7 +13,6 @@ const navigation = [
   { href: "/admin/certificates", label: "เกียรติบัตร", mark: "C" },
   { href: "/admin/signers", label: "ผู้ลงนาม", mark: "ล" },
   { href: "/admin/templates", label: "Template", mark: "T" },
-  { href: "/admin/import", label: "Import", mark: "I" },
   { href: "/admin/logs", label: "Logs", mark: "L" },
   { href: "/admin/settings", label: "Settings", mark: "S" },
 ];
