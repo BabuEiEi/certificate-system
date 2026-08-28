@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   inMemoryPersistence,
@@ -9,6 +9,7 @@ import {
   signOut,
 } from "firebase/auth";
 import { getFirebaseClientAuth } from "@/lib/firebase/client";
+import { showAppAlert } from "@/lib/sweetAlert";
 
 function getLoginErrorMessage(error) {
   if (error?.code === "auth/too-many-requests") {
@@ -24,17 +25,35 @@ function getLoginErrorMessage(error) {
 
 export default function LoginForm({ configured, externalError = "" }) {
   const router = useRouter();
-  const [error, setError] = useState(externalError);
   const [pending, setPending] = useState(false);
+
+  useEffect(() => {
+    if (externalError) {
+      void showAppAlert({ status: "error", message: externalError });
+    }
+  }, [externalError]);
 
   async function handleSubmit(event) {
     event.preventDefault();
-    setError("");
-    setPending(true);
 
     const formData = new FormData(event.currentTarget);
     const email = String(formData.get("email") ?? "").trim();
     const password = String(formData.get("password") ?? "");
+
+    if (!email || !password) {
+      void showAppAlert({
+        status: "warning",
+        message: "กรุณาระบุอีเมลและรหัสผ่านให้ครบถ้วน",
+      });
+      return;
+    }
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      void showAppAlert({ status: "warning", message: "กรุณาระบุอีเมลให้ถูกต้อง" });
+      return;
+    }
+
+    setPending(true);
 
     try {
       const auth = getFirebaseClientAuth();
@@ -51,27 +70,24 @@ export default function LoginForm({ configured, externalError = "" }) {
       await signOut(auth);
 
       if (!response.ok) {
-        setError(result.error || "ไม่สามารถเข้าสู่ระบบได้");
+        await showAppAlert({
+          status: "error",
+          message: result.error || "ไม่สามารถเข้าสู่ระบบได้",
+        });
         return;
       }
 
       router.replace("/admin/dashboard");
       router.refresh();
     } catch (loginError) {
-      setError(getLoginErrorMessage(loginError));
+      await showAppAlert({ status: "error", message: getLoginErrorMessage(loginError) });
     } finally {
       setPending(false);
     }
   }
 
   return (
-    <form onSubmit={handleSubmit} className="mt-8 space-y-5">
-      {error ? (
-        <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
-          {error}
-        </p>
-      ) : null}
-
+    <form onSubmit={handleSubmit} noValidate className="mt-8 space-y-5">
       <label className="block text-sm font-semibold text-slate-700">
         อีเมล
         <input

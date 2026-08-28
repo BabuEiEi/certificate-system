@@ -3,7 +3,7 @@
 import { useActionState, useMemo, useState } from "react";
 import { saveCertificateSettingsAction } from "@/app/admin/settings/actions";
 import { formatCertificateNumber } from "@/lib/certificateNumber";
-import { joinClassNames } from "@/lib/utils";
+import { useActionAlert } from "@/lib/sweetAlert";
 
 const initialActionState = { status: "idle", message: "", errors: {}, submittedAt: 0 };
 
@@ -16,6 +16,7 @@ export default function CertificateNumberSettings({ initialSettings }) {
     saveCertificateSettingsAction,
     initialActionState,
   );
+  useActionAlert(state);
 
   const preview = useMemo(() => {
     const digits = Math.max(1, Number(settings.numberDigits) || 1);
@@ -38,7 +39,7 @@ export default function CertificateNumberSettings({ initialSettings }) {
 
   return (
     <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
-      <form action={formAction} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-7">
+      <form action={formAction} noValidate className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-7">
         <div className="mb-6 flex items-start justify-between gap-4 border-b border-slate-100 pb-5">
           <div>
             <h2 className="text-lg font-bold text-slate-900">Certificate Number</h2>
@@ -80,20 +81,6 @@ export default function CertificateNumberSettings({ initialSettings }) {
             </select>
           </label>
         </div>
-
-        {state.message ? (
-          <p
-            className={joinClassNames(
-              "mt-6 rounded-xl border px-4 py-3 text-sm",
-              state.status === "success"
-                ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                : "border-rose-200 bg-rose-50 text-rose-700",
-            )}
-            aria-live="polite"
-          >
-            {state.message}
-          </p>
-        ) : null}
 
         <div className="mt-7 flex justify-end border-t border-slate-100 pt-5">
           <button

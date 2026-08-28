@@ -5,6 +5,7 @@ import {
   createEventAction,
   updateEventAction,
 } from "@/app/admin/events/actions";
+import { useActionAlert } from "@/lib/sweetAlert";
 import { joinClassNames } from "@/lib/utils";
 
 const initialActionState = {
@@ -28,24 +29,6 @@ const statusStyles = {
   ACTIVE: "bg-emerald-50 text-emerald-700",
   CLOSED: "bg-amber-50 text-amber-700",
 };
-
-function ActionMessage({ state }) {
-  if (!state.message) return null;
-
-  return (
-    <p
-      className={joinClassNames(
-        "rounded-xl px-4 py-3 text-sm",
-        state.status === "success"
-          ? "border border-emerald-200 bg-emerald-50 text-emerald-700"
-          : "border border-rose-200 bg-rose-50 text-rose-700",
-      )}
-      aria-live="polite"
-    >
-      {state.message}
-    </p>
-  );
-}
 
 function EventFormFields({ event }) {
   return (
@@ -138,6 +121,7 @@ function FormErrors({ errors }) {
 function CreateEventForm() {
   const [state, formAction, pending] = useActionState(createEventAction, initialActionState);
   const formReference = useRef(null);
+  useActionAlert(state);
 
   useEffect(() => {
     if (state.status === "success") formReference.current?.reset();
@@ -147,6 +131,7 @@ function CreateEventForm() {
     <form
       ref={formReference}
       action={formAction}
+      noValidate
       className="space-y-5 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-7"
     >
       <div className="border-b border-slate-100 pb-5">
@@ -156,7 +141,6 @@ function CreateEventForm() {
       </div>
       <EventFormFields />
       <FormErrors errors={state.errors} />
-      <ActionMessage state={state} />
       <div className="flex justify-end border-t border-slate-100 pt-5">
         <button
           type="submit"
@@ -172,13 +156,13 @@ function CreateEventForm() {
 
 function EditEventForm({ event }) {
   const [state, formAction, pending] = useActionState(updateEventAction, initialActionState);
+  useActionAlert(state);
 
   return (
-    <form action={formAction} className="space-y-5 border-t border-slate-100 bg-slate-50/70 p-5 sm:p-6">
+    <form action={formAction} noValidate className="space-y-5 border-t border-slate-100 bg-slate-50/70 p-5 sm:p-6">
       <input type="hidden" name="eventId" value={event.id} />
       <EventFormFields event={event} />
       <FormErrors errors={state.errors} />
-      <ActionMessage state={state} />
       <div className="flex justify-end">
         <button
           type="submit"

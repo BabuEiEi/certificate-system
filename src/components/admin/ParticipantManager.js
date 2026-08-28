@@ -15,6 +15,12 @@ import {
   normalizeParticipantText,
   participantStatusOptions,
 } from "@/lib/participant";
+import {
+  confirmAppAction,
+  showAppAlert,
+  showAppToast,
+  useActionAlert,
+} from "@/lib/sweetAlert";
 import { joinClassNames } from "@/lib/utils";
 
 const initialActionState = {
@@ -33,26 +39,6 @@ const statusStyles = {
   ELIGIBLE: "bg-emerald-50 text-emerald-700",
   EXCLUDED: "bg-rose-50 text-rose-700",
 };
-
-function ActionMessage({ state }) {
-  if (!state.message) return null;
-
-  return (
-    <p
-      className={joinClassNames(
-        "rounded-xl px-4 py-3 text-sm",
-        state.status === "success"
-          ? "border border-emerald-200 bg-emerald-50 text-emerald-700"
-          : state.status === "warning"
-            ? "border border-amber-200 bg-amber-50 text-amber-800"
-            : "border border-rose-200 bg-rose-50 text-rose-700",
-      )}
-      aria-live="polite"
-    >
-      {state.message}
-    </p>
-  );
-}
 
 function FormErrors({ errors }) {
   const names = ["fullName", "certificateType", "email", "organization", "recipientCode", "status"];
@@ -139,6 +125,7 @@ function CreateParticipantForm({ eventId }) {
     initialActionState,
   );
   const formReference = useRef(null);
+  useActionAlert(state);
 
   useEffect(() => {
     if (state.status === "success") formReference.current?.reset();
@@ -148,6 +135,7 @@ function CreateParticipantForm({ eventId }) {
     <form
       ref={formReference}
       action={formAction}
+      noValidate
       className="space-y-5 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-7"
     >
       <input type="hidden" name="eventId" value={eventId} />
@@ -165,7 +153,6 @@ function CreateParticipantForm({ eventId }) {
       </div>
       <ParticipantFields />
       <FormErrors errors={state.errors} />
-      <ActionMessage state={state} />
       <div className="flex justify-end border-t border-slate-100 pt-5">
         <button
           type="submit"
@@ -192,16 +179,33 @@ function EditParticipantForm({ eventId, participant }) {
     deleteParticipantAction,
     initialActionState,
   );
+  const deleteConfirmationGranted = useRef(false);
+  useActionAlert(updateState);
+  useActionAlert(deleteState);
 
-  function confirmDelete(event) {
-    if (!window.confirm(`ยืนยันลบ “${participant.fullName}” ออกจากกิจกรรมนี้หรือไม่`)) {
-      event.preventDefault();
+  async function confirmDelete(event) {
+    if (deleteConfirmationGranted.current) {
+      deleteConfirmationGranted.current = false;
+      return;
+    }
+
+    event.preventDefault();
+    const form = event.currentTarget;
+    const confirmed = await confirmAppAction({
+      title: "ยืนยันการลบผู้รับ",
+      message: `ต้องการลบ “${participant.fullName}” ออกจากกิจกรรมนี้หรือไม่`,
+      confirmButtonText: "ลบผู้รับ",
+    });
+
+    if (confirmed) {
+      deleteConfirmationGranted.current = true;
+      form.requestSubmit();
     }
   }
 
   return (
     <div className="space-y-5 border-t border-slate-100 bg-slate-50/70 p-5 sm:p-6">
-      <form action={updateAction} className="space-y-5">
+      <form action={updateAction} noValidate className="space-y-5">
         <input type="hidden" name="participantId" value={participant.id} />
         <input type="hidden" name="eventId" value={eventId} />
         <input
@@ -211,7 +215,6 @@ function EditParticipantForm({ eventId, participant }) {
         />
         <ParticipantFields participant={participant} />
         <FormErrors errors={updateState.errors} />
-        <ActionMessage state={updateState} />
         <div className="flex justify-end">
           <button
             type="submit"
@@ -232,7 +235,6 @@ function EditParticipantForm({ eventId, participant }) {
         className="flex flex-col gap-3 border-t border-slate-200 pt-5 sm:flex-row sm:items-center sm:justify-between"
       >
         <input type="hidden" name="participantId" value={participant.id} />
-        <ActionMessage state={deleteState} />
         <button
           type="submit"
           disabled={deletePending}
@@ -338,15 +340,17 @@ function ParticipantList({ eventId, participants, searchText }) {
 
 function ExportParticipantsButton({ event, participants }) {
   const [exporting, setExporting] = useState(false);
-  const [exportError, setExportError] = useState("");
 
   async function handleExport() {
     setExporting(true);
-    setExportError("");
     try {
       await exportParticipantsToExcel({ event, participants });
+      void showAppToast({ message: "ส่งออกรายชื่อ Excel เรียบร้อยแล้ว" });
     } catch {
-      setExportError("ไม่สามารถสร้างไฟล์ Excel ได้ กรุณาลองใหม่");
+      void showAppAlert({
+        status: "error",
+        message: "ไม่สามารถสร้างไฟล์ Excel ได้ กรุณาลองใหม่",
+      });
     } finally {
       setExporting(false);
     }
@@ -362,7 +366,6 @@ function ExportParticipantsButton({ event, participants }) {
       >
         {exporting ? "กำลังสร้าง Excel..." : "ส่งออกรายชื่อ Excel"}
       </button>
-      {exportError ? <span className="text-xs text-rose-600">{exportError}</span> : null}
     </div>
   );
 }

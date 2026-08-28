@@ -47,3 +47,68 @@ a {
   background: #dbeafe;
   color: #0b3458;
 }
+
+.app-swal-popup {
+  width: min(92vw, 30rem);
+  border-radius: 1.25rem;
+  padding: 1.5rem;
+  font-family: inherit;
+}
+
+.app-swal-title {
+  padding-top: 0.25rem;
+  color: #172033;
+  font-size: 1.35rem;
+  line-height: 1.5;
+}
+
+.app-swal-content {
+  color: #526078;
+  font-size: 0.95rem;
+  line-height: 1.75;
+  white-space: pre-line;
+}
+
+.app-swal-actions {
+  gap: 0.75rem;
+  margin-top: 1.5rem;
+}
+
+.app-swal-confirm,
+.app-swal-cancel {
+  min-width: 6.5rem;
+  border-radius: 0.75rem;
+  padding: 0.7rem 1.25rem;
+  font-weight: 700;
+  transition: background-color 150ms ease, border-color 150ms ease;
+}
+
+.app-swal-confirm {
+  background: var(--primary);
+  color: white;
+}
+
+.app-swal-confirm:hover {
+  background: var(--primary-dark);
+}
+
+.app-swal-cancel {
+  border: 1px solid #cbd5e1;
+  background: white;
+  color: #475569;
+}
+
+.app-swal-cancel:hover {
+  background: #f8fafc;
+}
+
+.app-swal-toast {
+  border-radius: 1rem;
+  font-family: inherit;
+}
+
+.app-swal-toast-title {
+  color: #172033;
+  font-size: 0.95rem;
+  line-height: 1.5;
+}

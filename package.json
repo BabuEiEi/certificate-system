@@ -19,6 +19,7 @@
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "read-excel-file": "^9.3.10",
+    "sweetalert2": "^11.26.25",
     "write-excel-file": "^4.1.1",
     "zod": "4.4.3"
   },

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { confirmAppAction, showAppAlert } from "@/lib/sweetAlert";
 
 function createEmptySigner() {
   return {
@@ -32,6 +33,14 @@ export default function SignersManager() {
   function handleFile(index, file) {
     if (!file) return;
 
+    if (!["image/png", "image/jpeg", "image/webp"].includes(file.type)) {
+      void showAppAlert({
+        status: "error",
+        message: "รองรับเฉพาะไฟล์ลายเซ็น PNG, JPEG หรือ WebP",
+      });
+      return;
+    }
+
     const reader = new FileReader();
     reader.addEventListener("load", () => {
       setSigners((current) =>
@@ -46,10 +55,24 @@ export default function SignersManager() {
         ),
       );
     });
+    reader.addEventListener("error", () => {
+      void showAppAlert({ status: "error", message: "ไม่สามารถอ่านไฟล์ลายเซ็นได้" });
+    });
     reader.readAsDataURL(file);
   }
 
-  function clearSigner(index) {
+  async function clearSigner(index) {
+    const signer = signers[index];
+    const hasData = Object.values(signer).some((value) => value && value !== "UPLOAD");
+    if (!hasData) return;
+
+    const confirmed = await confirmAppAction({
+      title: `ล้างข้อมูลผู้ลงนามลำดับที่ ${index + 1}`,
+      message: "ชื่อ ตำแหน่ง และไฟล์ลายเซ็นในรายการนี้จะถูกล้างออก",
+      confirmButtonText: "ล้างข้อมูล",
+    });
+    if (!confirmed) return;
+
     setSigners((current) =>
       current.map((signer, signerIndex) =>
         signerIndex === index ? createEmptySigner() : signer,
@@ -77,7 +100,7 @@ export default function SignersManager() {
               </div>
               <button
                 type="button"
-                onClick={() => clearSigner(index)}
+                onClick={() => void clearSigner(index)}
                 className="rounded-lg px-3 py-2 text-xs font-semibold text-rose-600 transition hover:bg-rose-50"
               >
                 ล้างข้อมูล

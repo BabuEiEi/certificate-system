@@ -12,7 +12,7 @@ import {
   parseCertificateType,
   parseParticipantStatus,
 } from "@/lib/participant";
-import { joinClassNames } from "@/lib/utils";
+import { showAppAlert, showAppToast, useActionAlert } from "@/lib/sweetAlert";
 
 const initialActionState = {
   status: "idle",
@@ -191,6 +191,7 @@ export default function ImportManager({
     importParticipantsAction,
     initialActionState,
   );
+  useActionAlert(state);
   const fileInputReference = useRef(null);
   const invalidCount = useMemo(
     () => rows.filter((row) => row.errors.length).length,
@@ -223,6 +224,11 @@ export default function ImportManager({
   const canImport = Boolean(selectedEventId && rows.length && !invalidCount && !fileError);
   const selectedEvent = events.find((event) => event.id === selectedEventId);
 
+  function reportFileError(message) {
+    setFileError(message);
+    void showAppAlert({ status: "error", message });
+  }
+
   async function handleFile(file) {
     setRows([]);
     setFileError("");
@@ -231,13 +237,13 @@ export default function ImportManager({
     if (!file) return;
 
     if (file.size > 2 * 1024 * 1024) {
-      setFileError("ไฟล์ต้องมีขนาดไม่เกิน 2 MB");
+      reportFileError("ไฟล์ต้องมีขนาดไม่เกิน 2 MB");
       return;
     }
 
     const extension = file.name.split(".").pop()?.toLowerCase();
     if (extension !== "xlsx") {
-      setFileError("รองรับเฉพาะไฟล์ Excel .xlsx");
+      reportFileError("รองรับเฉพาะไฟล์ Excel .xlsx");
       return;
     }
 
@@ -246,12 +252,14 @@ export default function ImportManager({
       const sourceRows = await readSheet(file);
       const result = parseParticipantRows(sourceRows);
       setRows(result.rows);
-      setFileError(result.fileError);
-      if (!result.fileError) {
+      if (result.fileError) {
+        reportFileError(result.fileError);
+      } else {
+        setFileError("");
         setImportToken(`${file.name}:${file.size}:${file.lastModified}:${Date.now()}`);
       }
     } catch {
-      setFileError("ไม่สามารถอ่านไฟล์ได้ กรุณาตรวจสอบว่าไฟล์ไม่เสียหาย");
+      reportFileError("ไม่สามารถอ่านไฟล์ได้ กรุณาตรวจสอบว่าไฟล์ไม่เสียหาย");
     } finally {
       setParsing(false);
     }
@@ -262,8 +270,9 @@ export default function ImportManager({
     setFileError("");
     try {
       await downloadParticipantExcelTemplate();
+      void showAppToast({ message: "ดาวน์โหลด Excel Template เรียบร้อยแล้ว" });
     } catch {
-      setFileError("ไม่สามารถสร้างไฟล์ Excel ตัวอย่างได้ กรุณาลองใหม่");
+      reportFileError("ไม่สามารถสร้างไฟล์ Excel ตัวอย่างได้ กรุณาลองใหม่");
     } finally {
       setTemplateDownloading(false);
     }
@@ -343,11 +352,6 @@ export default function ImportManager({
           ส่วนอีเมล รหัสผู้รับ หน่วยงาน / สถานศึกษา และสถานะสิทธิ์เป็นข้อมูลเสริม
         </div>
         {parsing ? <p className="mt-4 text-sm font-semibold text-brand">กำลังอ่านและตรวจไฟล์...</p> : null}
-        {fileError ? (
-          <p className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700" role="alert">
-            {fileError}
-          </p>
-        ) : null}
       </section>
 
       {rows.length ? (
@@ -460,21 +464,6 @@ export default function ImportManager({
                 status,
               })))}
             />
-            {state.message ? (
-              <p
-                className={joinClassNames(
-                  "rounded-xl px-4 py-3 text-sm",
-                  state.status === "success"
-                    ? "border border-emerald-200 bg-emerald-50 text-emerald-700"
-                    : state.status === "warning"
-                      ? "border border-amber-200 bg-amber-50 text-amber-800"
-                      : "border border-rose-200 bg-rose-50 text-rose-700",
-                )}
-                aria-live="polite"
-              >
-                {state.message}
-              </p>
-            ) : null}
             {activeNameConfirmation && state.duplicateNames?.length ? (
               <aside className="rounded-xl border border-amber-200 bg-amber-50 p-4" aria-label="รายชื่อที่ต้องยืนยันว่าซ้ำ">
                 <p className="text-sm font-bold text-amber-900">รายชื่อที่ต้องตรวจสอบก่อนยืนยัน</p>
@@ -509,20 +498,6 @@ export default function ImportManager({
             </div>
           </form>
         </section>
-      ) : state.message ? (
-        <p
-          className={joinClassNames(
-            "rounded-xl px-4 py-3 text-sm",
-            state.status === "success"
-              ? "border border-emerald-200 bg-emerald-50 text-emerald-700"
-              : state.status === "warning"
-                ? "border border-amber-200 bg-amber-50 text-amber-800"
-                : "border border-rose-200 bg-rose-50 text-rose-700",
-          )}
-          aria-live="polite"
-        >
-          {state.message}
-        </p>
       ) : null}
     </div>
   );
