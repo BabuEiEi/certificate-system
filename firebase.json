@@ -8,6 +8,17 @@
   "storage": {
     "rules": "storage.rules"
   },
+  "apphosting": {
+    "backendId": "certificate-system",
+    "rootDir": ".",
+    "ignore": [
+      "node_modules",
+      ".git",
+      "firebase-debug.log",
+      "firebase-debug.*.log",
+      "functions"
+    ]
+  },
   "emulators": {
     "auth": {
       "port": 9099

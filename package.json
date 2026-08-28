@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "firebase:emulators": "firebase emulators:start --project certificate-system-th-2026",
-    "firebase:deploy:rules": "firebase deploy --only firestore:rules,firestore:indexes --project certificate-system-th-2026"
+    "firebase:deploy:rules": "firebase deploy --only firestore:rules,firestore:indexes,storage --project certificate-system-th-2026",
+    "firebase:deploy:app": "firebase deploy --only apphosting --project certificate-system-th-2026"
   },
   "dependencies": {
     "firebase": "12.18.0",

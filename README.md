@@ -79,20 +79,26 @@ npm run firebase:deploy:rules
 
 ## Firebase App Hosting
 
-Firebase Hosting แบบ static ไม่รองรับ Server Actions และ session ฝั่งเซิร์ฟเวอร์ของระบบนี้ จึงใช้ Firebase App Hosting ซึ่งรัน Next.js บน Cloud Run และเชื่อม GitHub เพื่อ rollout อัตโนมัติ
+Firebase Hosting แบบ static ไม่รองรับ Server Actions และ session ฝั่งเซิร์ฟเวอร์ของระบบนี้ จึงใช้ Firebase App Hosting ซึ่งรัน Next.js บน Cloud Run โปรเจกต์นี้ตั้งค่าให้ deploy จาก local source ผ่าน Firebase CLI
 
 ก่อนสร้าง backend ต้องอัปเกรดโปรเจกต์เป็น Blaze แล้วเลือก:
 
 - Region: `asia-southeast1`
 - Repository root: `/`
-- Live branch: `main`
 - Backend ID: `certificate-system`
+
+เผยแพร่แอปเวอร์ชันใหม่ด้วยคำสั่ง:
+
+```bash
+npm run firebase:deploy:app
+```
 
 ## คำสั่งตรวจสอบ
 
 ```bash
 npm run lint
 npm run build
+npm run firebase:deploy:app
 npm run firebase:emulators
 ```
 
