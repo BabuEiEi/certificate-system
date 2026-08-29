@@ -139,7 +139,7 @@ function EventFormFields({ event }) {
       </label>
       <label className="text-sm font-semibold text-slate-700">
         เลขเริ่มต้น
-        {event ? (
+        {event?.hasCustomCertNumbering ? (
           <input type="hidden" name="certRunningNumberOriginal" value={event.certificateNumber?.runningNumber ?? ""} />
         ) : null}
         <input

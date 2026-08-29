@@ -24,7 +24,11 @@ function serializeEvent(snapshot) {
     signerCount: Number(data.signer_count ?? 3),
     // Falls back to the same defaults as the old global certificateSettings
     // doc so an event that hasn't customized its numbering yet still shows
-    // sensible values in the edit form.
+    // sensible values in the edit form. hasCustomCertNumbering distinguishes
+    // "showing a fallback default" from "this was actually saved" -- the
+    // edit form needs that distinction to know whether a first-time save
+    // should always stamp next_number (see actions.js).
+    hasCustomCertNumbering: data.next_number !== undefined,
     certificateNumber: serializeCertificateSettings(data),
     createdAt: serializeTimestamp(data.created_at),
     updatedAt: serializeTimestamp(data.updated_at),
