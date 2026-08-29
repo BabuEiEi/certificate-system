@@ -76,10 +76,11 @@ export async function getPublishedCertificateByToken(rawToken) {
   try {
     const snapshot = await getFirebaseAdminDb()
       .collection("publishedCertificates")
-      .doc(parsed.data)
+      .where("verification_token", "==", parsed.data)
+      .limit(1)
       .get();
 
-    return snapshot.exists ? serializeCertificate(snapshot) : null;
+    return snapshot.empty ? null : serializeCertificate(snapshot.docs[0]);
   } catch {
     return null;
   }

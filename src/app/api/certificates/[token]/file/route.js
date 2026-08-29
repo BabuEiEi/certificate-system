@@ -38,10 +38,16 @@ export async function GET(request, { params }) {
 
   try {
     const [buffer] = await getFirebaseAdminStorage().bucket().file(storagePath).download();
+    // certificate_number routinely contains Thai text (e.g. a "สทศ." prefix),
+    // which Content-Disposition cannot carry as a plain quoted filename (it's
+    // restricted to Latin-1 bytes and throws otherwise) -- use the RFC 6266
+    // filename* form with an ASCII-only fallback filename for older clients.
+    const downloadName = `certificate-${data.certificate_number || publishedDoc.id}.${format}`;
+    const asciiFallbackName = `certificate-${publishedDoc.id}.${format}`;
     return new Response(buffer, {
       headers: {
         "Cache-Control": "public, max-age=3600",
-        "Content-Disposition": `${format === "pdf" ? "attachment" : "inline"}; filename="certificate-${data.certificate_number || publishedDoc.id}.${format}"`,
+        "Content-Disposition": `${format === "pdf" ? "attachment" : "inline"}; filename="${asciiFallbackName}"; filename*=UTF-8''${encodeURIComponent(downloadName)}`,
         "Content-Length": String(buffer.length),
         "Content-Type": format === "pdf" ? "application/pdf" : "image/png",
         "X-Content-Type-Options": "nosniff",
