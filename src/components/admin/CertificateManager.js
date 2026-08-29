@@ -63,6 +63,10 @@ function RevokeControl({ certificateId }) {
 
   async function handleSubmit(event) {
     event.preventDefault();
+    // Captured before the dialog's await -- React detaches the synthetic
+    // event's fields (including currentTarget) once the handler yields, so
+    // reading it after awaiting promptAppInput() would throw.
+    const form = event.currentTarget;
     const { isConfirmed, value: reason } = await promptAppInput({
       title: "ยืนยันการยกเลิกเกียรติบัตร",
       message: "เกียรติบัตรนี้จะถูกทำเครื่องหมายว่ายกเลิก และแสดงสถานะนี้ในหน้าตรวจสอบสาธารณะ",
@@ -71,7 +75,7 @@ function RevokeControl({ certificateId }) {
     });
     if (!isConfirmed) return;
 
-    const formData = new FormData(event.currentTarget);
+    const formData = new FormData(form);
     formData.set("reason", reason);
     formAction(formData);
   }

@@ -123,6 +123,7 @@ function ActiveToggle({ user, disabled }) {
 
   async function handleSubmit(event) {
     event.preventDefault();
+    const form = event.currentTarget;
     if (user.isActive) {
       const confirmed = await confirmAppAction({
         title: "ระงับบัญชีผู้ใช้งาน",
@@ -131,7 +132,7 @@ function ActiveToggle({ user, disabled }) {
       });
       if (!confirmed) return;
     }
-    event.currentTarget.requestSubmit();
+    form.requestSubmit();
   }
 
   return (
