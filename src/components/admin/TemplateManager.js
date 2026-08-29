@@ -522,7 +522,7 @@ export default function TemplateManager({ events, templates, selectedEventId }) 
         บันทึกแล้ว {templates.length.toLocaleString("th-TH")} จาก {TEMPLATE_CERTIFICATE_TYPES.length.toLocaleString("th-TH")} แบบ
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-2">
+      <div className="grid gap-6">
         {TEMPLATE_CERTIFICATE_TYPES.map((type) => (
           <TemplateSlot
             key={type.value}
