@@ -66,18 +66,12 @@ function detectTemplateFileType(buffer) {
     return { contentType: "image/jpeg", extension: "jpg" };
   }
 
-  if (
-    buffer.length >= 12
-    && buffer.subarray(0, 4).toString("ascii") === "RIFF"
-    && buffer.subarray(8, 12).toString("ascii") === "WEBP"
-  ) {
-    return { contentType: "image/webp", extension: "webp" };
-  }
-
-  if (buffer.length >= 5 && buffer.subarray(0, 5).toString("ascii") === "%PDF-") {
-    return { contentType: "application/pdf", extension: "pdf" };
-  }
-
+  // WebP and PDF are intentionally not accepted for new uploads: a PDF
+  // template must be rasterized via pdfjs-dist before compositing, which is
+  // fragile to bundle correctly in a production build (see next.config.js).
+  // Existing PDF templates uploaded before this change keep working --
+  // src/lib/certificate/render.js still knows how to rasterize them -- only
+  // new uploads are restricted to PNG/JPEG.
   return null;
 }
 
@@ -90,7 +84,7 @@ async function validatedTemplateFile(file) {
   const buffer = Buffer.from(await file.arrayBuffer());
   const detectedType = detectTemplateFileType(buffer);
   if (!detectedType) {
-    return { file: null, error: "รองรับเฉพาะไฟล์แม่แบบ PNG, JPEG, WebP หรือ PDF" };
+    return { file: null, error: "รองรับเฉพาะไฟล์แม่แบบ PNG หรือ JPEG" };
   }
 
   return {

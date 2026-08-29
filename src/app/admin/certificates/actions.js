@@ -15,6 +15,7 @@ const documentIdSchema = z.string().trim().min(1).max(128).regex(/^[A-Za-z0-9_-]
 const issueSchema = z.object({
   eventId: documentIdSchema,
   participantIds: z.array(documentIdSchema).min(1, "กรุณาเลือกผู้เข้าร่วมอย่างน้อย 1 รายการ"),
+  outputFormat: z.enum(["PNG", "PDF"], { message: "กรุณาเลือกรูปแบบไฟล์เกียรติบัตร" }),
 });
 const revokeSchema = z.object({
   certificateId: documentIdSchema,
@@ -109,6 +110,7 @@ export async function issueCertificatesAction(_previousState, formData) {
   const parsed = issueSchema.safeParse({
     eventId: formData.get("eventId"),
     participantIds: formData.getAll("participantIds"),
+    outputFormat: formData.get("outputFormat"),
   });
 
   if (!parsed.success) {
@@ -119,7 +121,7 @@ export async function issueCertificatesAction(_previousState, formData) {
     );
   }
 
-  const { eventId, participantIds } = parsed.data;
+  const { eventId, participantIds, outputFormat } = parsed.data;
   const db = getFirebaseAdminDb();
   const storage = getFirebaseAdminStorage();
 
@@ -195,6 +197,7 @@ export async function issueCertificatesAction(_previousState, formData) {
         template: { id: template.id, ...templateData },
         signers,
         imageBuffers,
+        outputFormat,
       });
       issuedCount += 1;
     } catch {
@@ -218,7 +221,7 @@ export async function issueCertificatesAction(_previousState, formData) {
   return actionState("success", `ออกเกียรติบัตรสำเร็จ ${issuedCount} ฉบับ`);
 }
 
-async function issueSingleCertificate({ db, storage, actor, event, participant, template, signers, imageBuffers }) {
+async function issueSingleCertificate({ db, storage, actor, event, participant, template, signers, imageBuffers, outputFormat }) {
   const eventReference = db.collection("events").doc(event.id);
   // Events created before per-event numbering existed have no `next_number`
   // field yet, so they keep sharing this legacy global counter exactly as
@@ -284,21 +287,26 @@ async function issueSingleCertificate({ db, storage, actor, event, participant, 
     textValues,
     imageValues,
   });
-  const pdfBuffer = await buildCertificatePdf({ pngBuffer, width, height });
 
-  const pngPath = `certificates/${event.id}/${certificateReference.id}.png`;
-  const pdfPath = `certificates/${event.id}/${certificateReference.id}.pdf`;
+  // Only the format the admin chose is rendered, uploaded, and stored --
+  // generating both regardless of choice was pure wasted storage/compute.
+  let pngPath = "";
+  let pdfPath = "";
 
-  await Promise.all([
-    bucket.file(pngPath).save(pngBuffer, {
-      resumable: false,
-      metadata: { contentType: "image/png", cacheControl: "private, no-store" },
-    }),
-    bucket.file(pdfPath).save(pdfBuffer, {
+  if (outputFormat === "PDF") {
+    const pdfBuffer = await buildCertificatePdf({ pngBuffer, width, height });
+    pdfPath = `certificates/${event.id}/${certificateReference.id}.pdf`;
+    await bucket.file(pdfPath).save(pdfBuffer, {
       resumable: false,
       metadata: { contentType: "application/pdf", cacheControl: "private, no-store" },
-    }),
-  ]);
+    });
+  } else {
+    pngPath = `certificates/${event.id}/${certificateReference.id}.png`;
+    await bucket.file(pngPath).save(pngBuffer, {
+      resumable: false,
+      metadata: { contentType: "image/png", cacheControl: "private, no-store" },
+    });
+  }
 
   const batch = db.batch();
   batch.set(certificateReference, {
@@ -330,6 +338,8 @@ async function issueSingleCertificate({ db, storage, actor, event, participant, 
     issuer_name: event.issuerName,
     status: "PUBLISHED",
     revoke_reason: "",
+    has_png: Boolean(pngPath),
+    has_pdf: Boolean(pdfPath),
     search_terms: createSearchTerms(participant.full_name, certificateNumber),
     issued_at: FieldValue.serverTimestamp(),
     published_at: FieldValue.serverTimestamp(),

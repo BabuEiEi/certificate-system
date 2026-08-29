@@ -1,5 +1,6 @@
 import Link from "next/link";
 import EmptyState from "@/components/ui/EmptyState";
+import { CERTIFICATE_FILE_RETENTION_DAYS } from "@/lib/certificate/retention";
 import { getPublishedCertificateByToken } from "@/lib/data/publicCertificates";
 
 export const metadata = {
@@ -56,22 +57,32 @@ export default async function VerifyPage({ params }) {
               </div>
             ))}
           </dl>
-          {certificate.status === "PUBLISHED" ? (
+          {certificate.status === "PUBLISHED" && certificate.files_expired ? (
+            <div className="border-t border-slate-200 bg-slate-50 px-6 py-5 text-sm text-slate-500 sm:px-10">
+              ไฟล์เกียรติบัตรพ้นระยะเก็บรักษา ({CERTIFICATE_FILE_RETENTION_DAYS} วันหลังออก) จึงไม่สามารถดาวน์โหลดได้อีก
+              ข้อมูลด้านบนยังคงใช้เป็นหลักฐานการตรวจสอบได้ตามปกติ
+            </div>
+          ) : null}
+          {certificate.status === "PUBLISHED" && !certificate.files_expired && (certificate.has_png || certificate.has_pdf) ? (
             <div className="flex flex-wrap gap-3 border-t border-slate-200 bg-slate-50 px-6 py-5 sm:px-10">
-              <a
-                href={`/api/certificates/${token}/file?format=png`}
-                target="_blank"
-                rel="noreferrer"
-                className="rounded-xl border border-brand px-4 py-2.5 text-sm font-semibold text-brand transition hover:bg-blue-50"
-              >
-                ดูตัวอย่างเกียรติบัตร
-              </a>
-              <a
-                href={`/api/certificates/${token}/file?format=pdf`}
-                className="rounded-xl bg-brand px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-dark"
-              >
-                ดาวน์โหลด PDF
-              </a>
+              {certificate.has_png ? (
+                <a
+                  href={`/api/certificates/${token}/file?format=png`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="rounded-xl border border-brand px-4 py-2.5 text-sm font-semibold text-brand transition hover:bg-blue-50"
+                >
+                  ดูตัวอย่างเกียรติบัตร
+                </a>
+              ) : null}
+              {certificate.has_pdf ? (
+                <a
+                  href={`/api/certificates/${token}/file?format=pdf`}
+                  className="rounded-xl bg-brand px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-dark"
+                >
+                  ดาวน์โหลด PDF
+                </a>
+              ) : null}
             </div>
           ) : null}
         </section>

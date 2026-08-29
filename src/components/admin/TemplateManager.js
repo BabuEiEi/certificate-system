@@ -21,7 +21,7 @@ import {
 } from "@/lib/templateFields";
 
 const MAX_TEMPLATE_FILE_SIZE = 5 * 1024 * 1024;
-const acceptedTemplateTypes = ["image/png", "image/jpeg", "image/webp", "application/pdf"];
+const acceptedTemplateTypes = ["image/png", "image/jpeg"];
 const initialActionState = { status: "idle", message: "", errors: {}, submittedAt: 0 };
 // A4 landscape is the most common certificate proportion; used only until the
 // real template dimensions are known so the preview box doesn't jump around.
@@ -199,7 +199,7 @@ function TemplateSlot({ eventId, certificateType, typeLabel, template }) {
 
     if (!acceptedTemplateTypes.includes(file.type)) {
       if (fileInputReference.current) fileInputReference.current.value = "";
-      void showAppAlert({ status: "error", message: "รองรับเฉพาะไฟล์แม่แบบ PNG, JPEG, WebP หรือ PDF" });
+      void showAppAlert({ status: "error", message: "รองรับเฉพาะไฟล์แม่แบบ PNG หรือ JPEG" });
       return;
     }
 
@@ -277,7 +277,7 @@ function TemplateSlot({ eventId, certificateType, typeLabel, template }) {
       <header className="flex flex-col justify-between gap-3 border-b border-slate-100 bg-slate-50/80 px-5 py-4 sm:flex-row sm:items-center sm:px-7">
         <div>
           <h2 className="font-bold text-slate-800">แม่แบบ: {typeLabel}</h2>
-          <p className="text-xs text-slate-400">ไฟล์ภาพหรือ PDF ที่ใช้พิมพ์เกียรติบัตรประเภทนี้</p>
+          <p className="text-xs text-slate-400">ไฟล์ภาพ PNG/JPEG ที่ใช้พิมพ์เกียรติบัตรประเภทนี้</p>
         </div>
         <span className={`w-fit rounded-full px-3 py-1 text-xs font-semibold ${template ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>
           {template ? "บันทึกแล้ว" : "ยังไม่มีข้อมูล"}
@@ -293,13 +293,13 @@ function TemplateSlot({ eventId, certificateType, typeLabel, template }) {
           <span className="block text-sm font-semibold text-slate-700">
             {template?.fileUrl ? "เลือกไฟล์ใหม่เพื่อแทนที่แม่แบบ" : "เลือกไฟล์แม่แบบ *"}
           </span>
-          <span className="mt-1 block text-xs text-slate-400">PNG, JPEG, WebP หรือ PDF · ไม่เกิน 5 MB</span>
+          <span className="mt-1 block text-xs text-slate-400">PNG หรือ JPEG · ไม่เกิน 5 MB</span>
           <input
             key={resetVersion}
             ref={fileInputReference}
             type="file"
             name="template"
-            accept="image/png,image/jpeg,image/webp,application/pdf"
+            accept="image/png,image/jpeg"
             className="mt-3 block w-full text-xs text-slate-500 file:mr-3 file:rounded-lg file:border-0 file:bg-brand file:px-4 file:py-2 file:font-semibold file:text-white"
             onChange={(event) => handleFile(event.target.files?.[0])}
           />

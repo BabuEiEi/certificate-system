@@ -1,6 +1,7 @@
 import "server-only";
 
 import { z } from "zod";
+import { isCertificateFileExpired } from "@/lib/certificate/retention";
 import { getFirebaseAdminDb } from "@/lib/firebase/admin";
 import { isFirebaseAdminConfigured } from "@/lib/firebase/config";
 import { normalizeSearchTerm } from "@/lib/firebase/search";
@@ -17,13 +18,18 @@ function serializeTimestamp(value) {
 
 function serializeCertificate(snapshot) {
   const data = snapshot.data();
+  const issuedAt = serializeTimestamp(data.issued_at);
   return {
     ...data,
     certificate_id: data.certificate_id ?? snapshot.id,
     verification_token: data.verification_token ?? snapshot.id,
-    issued_at: serializeTimestamp(data.issued_at),
+    issued_at: issuedAt,
     published_at: serializeTimestamp(data.published_at),
     revoked_at: serializeTimestamp(data.revoked_at),
+    // See the Cloud Storage lifecycle rule on the `certificates/` prefix --
+    // files are deleted automatically after this window, independent of
+    // this app; this just stops the page from offering a dead link.
+    files_expired: isCertificateFileExpired(issuedAt),
   };
 }
 

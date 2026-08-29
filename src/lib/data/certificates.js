@@ -1,5 +1,6 @@
 import "server-only";
 
+import { isCertificateFileExpired } from "@/lib/certificate/retention";
 import { getFirebaseAdminDb } from "@/lib/firebase/admin";
 
 function serializeTimestamp(value) {
@@ -11,6 +12,7 @@ function serializeTimestamp(value) {
 
 function serializeCertificate(snapshot) {
   const data = snapshot.data();
+  const issuedAt = serializeTimestamp(data.issued_at);
 
   return {
     id: snapshot.id,
@@ -22,10 +24,17 @@ function serializeCertificate(snapshot) {
     status: data.status ?? "PUBLISHED",
     verificationToken: data.verification_token ?? "",
     revokeReason: data.revoke_reason ?? "",
-    issuedAt: serializeTimestamp(data.issued_at),
+    issuedAt,
     publishedAt: serializeTimestamp(data.published_at),
     revokedAt: serializeTimestamp(data.revoked_at),
     createdAt: serializeTimestamp(data.created_at),
+    // The underlying files are auto-deleted by a Cloud Storage lifecycle
+    // rule on the `certificates/` prefix after CERTIFICATE_FILE_RETENTION_DAYS,
+    // independent of this app -- this flag just lets the UI stop offering a
+    // dead download link once that's expected to have happened.
+    filesExpired: isCertificateFileExpired(issuedAt),
+    hasPng: Boolean(data.png_path),
+    hasPdf: Boolean(data.pdf_path),
     fileUrl: `/api/admin/certificates/${encodeURIComponent(snapshot.id)}/file?format=png`,
     pdfUrl: `/api/admin/certificates/${encodeURIComponent(snapshot.id)}/file?format=pdf`,
   };

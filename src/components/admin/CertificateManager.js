@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { useActionState } from "react";
 import { issueCertificatesAction, revokeCertificateAction } from "@/app/admin/certificates/actions";
+import { CERTIFICATE_FILE_RETENTION_DAYS } from "@/lib/certificate/retention";
 import { confirmAppAction, useActionAlert } from "@/lib/sweetAlert";
 import { getCertificateTypeLabel } from "@/lib/participant";
 
@@ -24,14 +25,27 @@ function statusBadge(status) {
 
 function IssueButton({ eventId, selectedIds }) {
   const [state, formAction, pending] = useActionState(issueCertificatesAction, initialActionState);
+  const [outputFormat, setOutputFormat] = useState("PNG");
   useActionAlert(state);
 
   return (
-    <form action={formAction}>
+    <form action={formAction} className="flex flex-wrap items-end gap-3">
       <input type="hidden" name="eventId" value={eventId} />
       {selectedIds.map((id) => (
         <input key={id} type="hidden" name="participantIds" value={id} />
       ))}
+      <label className="text-sm font-semibold text-slate-700">
+        รูปแบบไฟล์
+        <select
+          className="mt-2 h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-800 outline-none transition focus:border-brand focus:ring-4 focus:ring-blue-100"
+          name="outputFormat"
+          value={outputFormat}
+          onChange={(event) => setOutputFormat(event.target.value)}
+        >
+          <option value="PNG">PNG</option>
+          <option value="PDF">PDF</option>
+        </select>
+      </label>
       <button
         type="submit"
         disabled={pending || !selectedIds.length}
@@ -174,19 +188,31 @@ export default function CertificateManager({ events, selectedEventId, participan
                     <div className="flex justify-end gap-2">
                       {certificate ? (
                         <>
-                          <Link
-                            href={certificate.fileUrl}
-                            target="_blank"
-                            className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 transition hover:bg-slate-50"
-                          >
-                            ดูตัวอย่าง
-                          </Link>
-                          <Link
-                            href={certificate.pdfUrl}
-                            className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 transition hover:bg-slate-50"
-                          >
-                            PDF
-                          </Link>
+                          {certificate.filesExpired ? (
+                            <span className="rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-400">
+                              ไฟล์หมดอายุ (เกิน {CERTIFICATE_FILE_RETENTION_DAYS} วัน)
+                            </span>
+                          ) : (
+                            <>
+                              {certificate.hasPng ? (
+                                <Link
+                                  href={certificate.fileUrl}
+                                  target="_blank"
+                                  className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 transition hover:bg-slate-50"
+                                >
+                                  ดูตัวอย่าง
+                                </Link>
+                              ) : null}
+                              {certificate.hasPdf ? (
+                                <Link
+                                  href={certificate.pdfUrl}
+                                  className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 transition hover:bg-slate-50"
+                                >
+                                  PDF
+                                </Link>
+                              ) : null}
+                            </>
+                          )}
                           {certificate.status === "PUBLISHED" ? (
                             <RevokeControl certificateId={certificate.id} />
                           ) : null}
