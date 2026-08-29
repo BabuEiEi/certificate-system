@@ -243,6 +243,8 @@ export default function SignersManager({ events, signers, selectedEventId }) {
   }
 
   const selectedEvent = events.find((event) => event.id === selectedEventId);
+  const signerCount = selectedEvent?.signerCount ?? 3;
+  const signerOrders = Array.from({ length: signerCount }, (_, index) => index + 1);
 
   return (
     <div className="space-y-6">
@@ -261,10 +263,13 @@ export default function SignersManager({ events, signers, selectedEventId }) {
       <div className="rounded-2xl border border-slate-200 bg-white px-5 py-4 text-sm text-slate-600 shadow-sm">
         <span className="font-semibold text-slate-800">{selectedEvent?.name ?? "—"}</span>
         <span className="mx-2 text-slate-300">•</span>
-        บันทึกแล้ว {signers.length.toLocaleString("th-TH")} จาก 3 คน
+        บันทึกแล้ว {signers.filter((item) => item.order <= signerCount).length.toLocaleString("th-TH")} จาก {signerCount.toLocaleString("th-TH")} คน
+        <span className="mx-2 text-slate-300">•</span>
+        กำหนดจำนวนผู้ลงนามได้ที่เมนู{" "}
+        <Link href="/admin/events" className="font-semibold text-brand hover:underline">กิจกรรม</Link>
       </div>
 
-      {[1, 2, 3].map((order) => (
+      {signerOrders.map((order) => (
         <SignerSlot
           key={order}
           eventId={selectedEventId}

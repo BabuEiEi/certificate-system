@@ -1,5 +1,6 @@
 import "server-only";
 
+import { serializeCertificateSettings } from "@/lib/certificateSettings";
 import { getFirebaseAdminDb } from "@/lib/firebase/admin";
 
 function serializeTimestamp(value) {
@@ -20,6 +21,11 @@ function serializeEvent(snapshot) {
     startDate: data.start_date ?? "",
     endDate: data.end_date ?? "",
     status: data.status ?? "DRAFT",
+    signerCount: Number(data.signer_count ?? 3),
+    // Falls back to the same defaults as the old global certificateSettings
+    // doc so an event that hasn't customized its numbering yet still shows
+    // sensible values in the edit form.
+    certificateNumber: serializeCertificateSettings(data),
     createdAt: serializeTimestamp(data.created_at),
     updatedAt: serializeTimestamp(data.updated_at),
   };

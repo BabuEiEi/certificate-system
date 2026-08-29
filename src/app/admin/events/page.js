@@ -1,9 +1,11 @@
 import EventManager from "@/components/admin/EventManager";
+import { requireAdmin } from "@/lib/auth";
 import { getEvents } from "@/lib/data/events";
 
 export const metadata = { title: "กิจกรรม" };
 
 export default async function EventsPage() {
+  await requireAdmin();
   const events = await getEvents();
 
   return (

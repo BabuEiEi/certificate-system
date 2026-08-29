@@ -5,6 +5,7 @@ import {
   createEventAction,
   updateEventAction,
 } from "@/app/admin/events/actions";
+import { DEFAULT_CERTIFICATE_SETTINGS } from "@/lib/certificateSettings";
 import { useActionAlert } from "@/lib/sweetAlert";
 import { joinClassNames } from "@/lib/utils";
 
@@ -99,12 +100,117 @@ function EventFormFields({ event }) {
           placeholder="รายละเอียด วัตถุประสงค์ หรือหมายเหตุของกิจกรรม"
         />
       </label>
+      <label className="text-sm font-semibold text-slate-700 sm:col-span-2">
+        จำนวนผู้ลงนาม
+        <select
+          className={fieldClassName}
+          name="signerCount"
+          defaultValue={String(event?.signerCount ?? 3)}
+        >
+          <option value="1">1 คน</option>
+          <option value="2">2 คน</option>
+          <option value="3">3 คน</option>
+        </select>
+      </label>
+
+      <div className="sm:col-span-2">
+        <p className="mb-1 text-sm font-bold text-slate-800">เลขที่เกียรติบัตรของกิจกรรมนี้</p>
+        <p className="mb-4 text-xs text-slate-400">
+          กำหนดรูปแบบและเลขเริ่มต้นเฉพาะกิจกรรมนี้ แยกจากกิจกรรมอื่น
+        </p>
+      </div>
+      <label className="text-sm font-semibold text-slate-700">
+        ข้อความนำหน้า
+        <input
+          className={fieldClassName}
+          name="certDisplayPrefix"
+          defaultValue={event?.certificateNumber?.displayPrefix ?? DEFAULT_CERTIFICATE_SETTINGS.displayPrefix}
+          maxLength={40}
+        />
+      </label>
+      <label className="text-sm font-semibold text-slate-700">
+        Prefix
+        <input
+          className={fieldClassName}
+          name="certPrefix"
+          defaultValue={event?.certificateNumber?.prefix ?? DEFAULT_CERTIFICATE_SETTINGS.prefix}
+          maxLength={40}
+        />
+      </label>
+      <label className="text-sm font-semibold text-slate-700">
+        เลขเริ่มต้น
+        {event ? (
+          <input type="hidden" name="certRunningNumberOriginal" value={event.certificateNumber?.runningNumber ?? ""} />
+        ) : null}
+        <input
+          className={fieldClassName}
+          name="certRunningNumber"
+          type="number"
+          min="1"
+          defaultValue={event?.certificateNumber?.runningNumber ?? DEFAULT_CERTIFICATE_SETTINGS.runningNumber}
+        />
+      </label>
+      <label className="text-sm font-semibold text-slate-700">
+        จำนวนหลัก
+        <input
+          className={fieldClassName}
+          name="certNumberDigits"
+          type="number"
+          min="1"
+          max="12"
+          defaultValue={event?.certificateNumber?.numberDigits ?? DEFAULT_CERTIFICATE_SETTINGS.numberDigits}
+        />
+      </label>
+      <label className="text-sm font-semibold text-slate-700">
+        ตัวคั่น
+        <input
+          className={fieldClassName}
+          name="certSeparator"
+          maxLength={3}
+          defaultValue={event?.certificateNumber?.separator ?? DEFAULT_CERTIFICATE_SETTINGS.separator}
+        />
+      </label>
+      <label className="text-sm font-semibold text-slate-700">
+        ปี
+        <input
+          className={fieldClassName}
+          name="certYear"
+          inputMode="numeric"
+          defaultValue={event?.certificateNumber?.year ?? DEFAULT_CERTIFICATE_SETTINGS.year}
+        />
+      </label>
+      <label className="text-sm font-semibold text-slate-700 sm:col-span-2">
+        รูปแบบตัวเลข
+        <select
+          className={fieldClassName}
+          name="certNumberFormat"
+          defaultValue={event?.certificateNumber?.numberFormat ?? DEFAULT_CERTIFICATE_SETTINGS.numberFormat}
+        >
+          <option value="THAI">เลขไทย</option>
+          <option value="ARABIC">เลขอารบิก</option>
+        </select>
+      </label>
     </div>
   );
 }
 
 function FormErrors({ errors }) {
-  const fieldNames = ["name", "issuerName", "startDate", "endDate", "status", "description"];
+  const fieldNames = [
+    "name",
+    "issuerName",
+    "startDate",
+    "endDate",
+    "status",
+    "description",
+    "signerCount",
+    "certDisplayPrefix",
+    "certPrefix",
+    "certRunningNumber",
+    "certNumberDigits",
+    "certSeparator",
+    "certYear",
+    "certNumberFormat",
+  ];
   const visibleErrors = fieldNames.filter((name) => errors?.[name]?.[0]);
 
   if (!visibleErrors.length) return null;

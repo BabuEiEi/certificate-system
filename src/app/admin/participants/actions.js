@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { FieldValue } from "firebase-admin/firestore";
 import { z } from "zod";
-import { requireAdmin } from "@/lib/auth";
+import { requireStaff } from "@/lib/auth";
 import { createAuditLogData } from "@/lib/audit";
 import { getFirebaseAdminDb } from "@/lib/firebase/admin";
 import {
@@ -129,7 +129,7 @@ function duplicateNameState(message, confirmationNameKey) {
 }
 
 export async function createParticipantAction(_previousState, formData) {
-  const actor = await requireAdmin();
+  const actor = await requireStaff();
   const parsed = parseParticipantForm(formData);
 
   if (!parsed.success) return validationState(parsed.error);
@@ -214,7 +214,7 @@ export async function createParticipantAction(_previousState, formData) {
 }
 
 export async function updateParticipantAction(_previousState, formData) {
-  const actor = await requireAdmin();
+  const actor = await requireStaff();
   const parsedId = documentIdSchema.safeParse(formData.get("participantId"));
   const parsed = parseParticipantForm(formData);
 
@@ -307,7 +307,7 @@ export async function updateParticipantAction(_previousState, formData) {
 }
 
 export async function deleteParticipantAction(_previousState, formData) {
-  const actor = await requireAdmin();
+  const actor = await requireStaff();
   const parsedId = documentIdSchema.safeParse(formData.get("participantId"));
 
   if (!parsedId.success) {
@@ -366,7 +366,7 @@ export async function deleteParticipantAction(_previousState, formData) {
 }
 
 export async function importParticipantsAction(_previousState, formData) {
-  const actor = await requireAdmin();
+  const actor = await requireStaff();
   const parsedEventId = documentIdSchema.safeParse(formData.get("eventId"));
   const importToken = String(formData.get("importToken") ?? "").slice(0, 200);
   const allowNameDuplicates =

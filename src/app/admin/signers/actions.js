@@ -138,6 +138,11 @@ export async function saveSignerAction(_previousState, formData) {
     return actionState("error", "ไม่พบกิจกรรมที่ต้องการกำหนดผู้ลงนาม");
   }
 
+  const signerCount = Number(eventSnapshot.data()?.signer_count ?? 3);
+  if (data.order > signerCount) {
+    return actionState("error", `กิจกรรมนี้กำหนดจำนวนผู้ลงนามไว้ที่ ${signerCount} คน`);
+  }
+
   const previousData = signerSnapshot.data() ?? {};
   if (!signature.file && !previousData.image_path) {
     return actionState("error", "กรุณาเลือกไฟล์ลายเซ็น", {

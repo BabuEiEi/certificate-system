@@ -53,7 +53,8 @@ export async function POST(request) {
       .get();
     const profile = profileSnapshot.data();
 
-    if (!profileSnapshot.exists || profile?.role !== "ADMIN" || !profile?.is_active) {
+    const isAllowedRole = profile?.role === "ADMIN" || profile?.role === "STAFF";
+    if (!profileSnapshot.exists || !isAllowedRole || !profile?.is_active) {
       return NextResponse.json(
         { error: "บัญชีนี้ยังไม่ได้รับสิทธิ์ผู้ดูแลระบบ" },
         { status: 403 },

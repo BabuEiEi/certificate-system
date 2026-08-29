@@ -1,5 +1,5 @@
 import AdminShell from "@/components/admin/AdminShell";
-import { requireAdmin } from "@/lib/auth";
+import { requireStaff } from "@/lib/auth";
 
 export const metadata = {
   title: "ระบบจัดการ",
@@ -8,6 +8,6 @@ export const metadata = {
 export const dynamic = "force-dynamic";
 
 export default async function AdminLayout({ children }) {
-  const user = await requireAdmin();
+  const user = await requireStaff();
   return <AdminShell user={user}>{children}</AdminShell>;
 }

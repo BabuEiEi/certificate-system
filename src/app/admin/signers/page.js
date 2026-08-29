@@ -1,4 +1,5 @@
 import SignersManager from "@/components/admin/SignersManager";
+import { requireAdmin } from "@/lib/auth";
 import { getEvents } from "@/lib/data/events";
 import { getSigners } from "@/lib/data/signers";
 
@@ -7,6 +8,7 @@ export const metadata = {
 };
 
 export default async function SignersPage({ searchParams }) {
+  await requireAdmin();
   const events = await getEvents();
   const query = await searchParams;
   const selectedEventId = events.some((event) => event.id === query.event)

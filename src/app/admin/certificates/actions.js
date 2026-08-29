@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { FieldValue } from "firebase-admin/firestore";
 import { z } from "zod";
-import { requireAdmin } from "@/lib/auth";
+import { requireStaff } from "@/lib/auth";
 import { createAuditLogData } from "@/lib/audit";
 import { getFirebaseAdminDb, getFirebaseAdminStorage } from "@/lib/firebase/admin";
 import { createSearchTerms } from "@/lib/firebase/search";
@@ -105,7 +105,7 @@ function buildPlacementValues({ certificateNumber, participant, event, signers, 
 }
 
 export async function issueCertificatesAction(_previousState, formData) {
-  const actor = await requireAdmin();
+  const actor = await requireStaff();
   const parsed = issueSchema.safeParse({
     eventId: formData.get("eventId"),
     participantIds: formData.getAll("participantIds"),
@@ -219,7 +219,12 @@ export async function issueCertificatesAction(_previousState, formData) {
 }
 
 async function issueSingleCertificate({ db, storage, actor, event, participant, template, signers, imageBuffers }) {
-  const settingsReference = db.collection("certificateSettings").doc("default");
+  const eventReference = db.collection("events").doc(event.id);
+  // Events created before per-event numbering existed have no `next_number`
+  // field yet, so they keep sharing this legacy global counter exactly as
+  // before -- only an event whose admin has explicitly set its own numbering
+  // (giving it a `next_number`) switches over to counting independently.
+  const legacySettingsReference = db.collection("certificateSettings").doc("default");
   const certificateReference = db.collection("certificates").doc();
   const publishedReference = db.collection("publishedCertificates").doc(certificateReference.id);
   const auditReference = db.collection("auditLogs").doc();
@@ -227,8 +232,16 @@ async function issueSingleCertificate({ db, storage, actor, event, participant, 
   const issuedDate = new Date();
 
   const { certificateNumber } = await db.runTransaction(async (transaction) => {
-    const settingsSnapshot = await transaction.get(settingsReference);
-    const settings = settingsSnapshot.data() ?? {};
+    const eventSnapshot = await transaction.get(eventReference);
+    const eventData = eventSnapshot.data() ?? {};
+    const hasOwnNumbering = eventData.next_number !== undefined;
+
+    let settings = eventData;
+    if (!hasOwnNumbering) {
+      const legacySnapshot = await transaction.get(legacySettingsReference);
+      settings = legacySnapshot.data() ?? {};
+    }
+
     const nextNumber = Number(settings.next_number ?? 1);
     const numberDigits = Number(settings.number_digits ?? 4);
     const runningNumber = String(nextNumber).padStart(numberDigits, "0");
@@ -242,8 +255,9 @@ async function issueSingleCertificate({ db, storage, actor, event, participant, 
       numberFormat: settings.number_format ?? "ARABIC",
     });
 
+    const counterReference = hasOwnNumbering ? eventReference : legacySettingsReference;
     transaction.set(
-      settingsReference,
+      counterReference,
       { next_number: nextNumber + 1, updated_at: FieldValue.serverTimestamp(), updated_by: actor.id },
       { merge: true },
     );
@@ -341,7 +355,7 @@ async function issueSingleCertificate({ db, storage, actor, event, participant, 
 }
 
 export async function revokeCertificateAction(_previousState, formData) {
-  const actor = await requireAdmin();
+  const actor = await requireStaff();
   const parsed = revokeSchema.safeParse({
     certificateId: formData.get("certificateId"),
     reason: formData.get("reason"),

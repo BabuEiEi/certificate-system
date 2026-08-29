@@ -6,6 +6,8 @@ import { getFirebaseAdminAuth, getFirebaseAdminDb } from "@/lib/firebase/admin";
 import { isFirebaseAdminConfigured } from "@/lib/firebase/config";
 import { getSessionCookie } from "@/lib/firebase/session";
 
+const ADMIN_CONSOLE_ROLES = new Set(["ADMIN", "STAFF"]);
+
 export const getAdminUser = cache(async () => {
   if (!isFirebaseAdminConfigured()) return null;
 
@@ -20,7 +22,7 @@ export const getAdminUser = cache(async () => {
       .get();
     const profile = profileSnapshot.data();
 
-    if (!profileSnapshot.exists || profile?.role !== "ADMIN" || !profile?.is_active) {
+    if (!profileSnapshot.exists || !ADMIN_CONSOLE_ROLES.has(profile?.role) || !profile?.is_active) {
       return null;
     }
 
@@ -35,12 +37,28 @@ export const getAdminUser = cache(async () => {
   }
 });
 
+function redirectUnauthorized() {
+  const reason = isFirebaseAdminConfigured() ? "not-authorized" : "not-configured";
+  redirect(`/login?error=${reason}`);
+}
+
+// ADMIN-only: events, signers, and user-account management.
 export async function requireAdmin() {
   const user = await getAdminUser();
 
+  if (!user || user.role !== "ADMIN") {
+    redirectUnauthorized();
+  }
+
+  return user;
+}
+
+// ADMIN or STAFF: participants, templates, and issuing/revoking certificates.
+export async function requireStaff() {
+  const user = await getAdminUser();
+
   if (!user) {
-    const reason = isFirebaseAdminConfigured() ? "not-authorized" : "not-configured";
-    redirect(`/login?error=${reason}`);
+    redirectUnauthorized();
   }
 
   return user;

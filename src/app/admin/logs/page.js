@@ -1,3 +1,4 @@
+import { requireAdmin } from "@/lib/auth";
 import { getAuditLogs } from "@/lib/data/auditLogs";
 
 export const metadata = { title: "Logs" };
@@ -13,6 +14,9 @@ const actionLabels = {
   SIGNER_UPDATED: "แก้ไขผู้ลงนาม",
   SIGNER_DELETED: "ลบผู้ลงนาม",
   SETTINGS_UPDATED: "แก้ไขการตั้งค่าเลขเกียรติบัตร",
+  USER_CREATED: "เพิ่มบัญชีผู้ใช้งาน",
+  USER_ROLE_UPDATED: "แก้ไขบทบาทผู้ใช้งาน",
+  USER_ACTIVE_UPDATED: "แก้ไขสถานะผู้ใช้งาน",
 };
 
 function formatDateTime(value) {
@@ -40,6 +44,7 @@ function describeLog(log) {
 }
 
 export default async function LogsPage() {
+  await requireAdmin();
   const logs = await getAuditLogs();
 
   return (

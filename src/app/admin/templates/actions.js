@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { FieldValue } from "firebase-admin/firestore";
 import { z } from "zod";
-import { requireAdmin } from "@/lib/auth";
+import { requireStaff } from "@/lib/auth";
 import { createAuditLogData } from "@/lib/audit";
 import { getFirebaseAdminDb, getFirebaseAdminStorage } from "@/lib/firebase/admin";
 import {
@@ -109,7 +109,7 @@ function revalidateTemplateViews() {
 }
 
 export async function saveTemplateAction(_previousState, formData) {
-  const actor = await requireAdmin();
+  const actor = await requireStaff();
   const parsed = templateSchema.safeParse({
     eventId: formData.get("eventId"),
     certificateType: formData.get("certificateType"),
@@ -242,7 +242,7 @@ export async function saveTemplateAction(_previousState, formData) {
 }
 
 export async function deleteTemplateAction(_previousState, formData) {
-  const actor = await requireAdmin();
+  const actor = await requireStaff();
   const parsedEventId = documentIdSchema.safeParse(formData.get("eventId"));
   const parsedCertificateType = z
     .enum(TEMPLATE_CERTIFICATE_TYPE_VALUES)

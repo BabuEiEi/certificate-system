@@ -7,19 +7,20 @@ import { joinClassNames } from "@/lib/utils";
 import { logoutAction } from "@/app/login/actions";
 
 const navigation = [
-  { href: "/admin/dashboard", label: "Dashboard", mark: "D" },
-  { href: "/admin/events", label: "กิจกรรม", mark: "ก" },
-  { href: "/admin/participants", label: "ผู้รับเกียรติบัตร", mark: "ผ" },
-  { href: "/admin/certificates", label: "เกียรติบัตร", mark: "C" },
-  { href: "/admin/signers", label: "ผู้ลงนาม", mark: "ล" },
-  { href: "/admin/templates", label: "แม่แบบ", mark: "ม" },
-  { href: "/admin/logs", label: "Logs", mark: "L" },
-  { href: "/admin/settings", label: "Settings", mark: "S" },
+  { href: "/admin/dashboard", label: "Dashboard", mark: "D", adminOnly: false },
+  { href: "/admin/events", label: "กิจกรรม", mark: "ก", adminOnly: true },
+  { href: "/admin/participants", label: "ผู้รับเกียรติบัตร", mark: "ผ", adminOnly: false },
+  { href: "/admin/certificates", label: "เกียรติบัตร", mark: "C", adminOnly: false },
+  { href: "/admin/signers", label: "ผู้ลงนาม", mark: "ล", adminOnly: true },
+  { href: "/admin/templates", label: "แม่แบบ", mark: "ม", adminOnly: false },
+  { href: "/admin/logs", label: "Logs", mark: "L", adminOnly: true },
+  { href: "/admin/settings", label: "Settings", mark: "S", adminOnly: true },
 ];
 
 export default function AdminShell({ children, user }) {
   const pathname = usePathname();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const visibleNavigation = navigation.filter((item) => !item.adminOnly || user.role === "ADMIN");
 
   return (
     <div className="min-h-screen bg-slate-100">
@@ -59,7 +60,7 @@ export default function AdminShell({ children, user }) {
         </div>
 
         <nav className="flex-1 space-y-1 overflow-y-auto px-4 py-6" aria-label="เมนูผู้ดูแลระบบ">
-          {navigation.map((item) => {
+          {visibleNavigation.map((item) => {
             const active = pathname === item.href;
 
             return (
