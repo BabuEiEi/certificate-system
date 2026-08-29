@@ -94,6 +94,12 @@ function RevokeControl({ certificateId }) {
   );
 }
 
+// A revoked certificate doesn't block reissuing (see issueCertificatesAction)
+// -- only a still-live PUBLISHED one does.
+function canIssue(certificate) {
+  return !certificate || certificate.status !== "PUBLISHED";
+}
+
 export default function CertificateManager({ events, selectedEventId, participants, certificatesByParticipantId }) {
   const [selectedIds, setSelectedIds] = useState([]);
 
@@ -121,13 +127,13 @@ export default function CertificateManager({ events, selectedEventId, participan
     }
     setSelectedIds(
       eligibleParticipants
-        .filter((participant) => !certificatesByParticipantId[participant.id])
+        .filter((participant) => canIssue(certificatesByParticipantId[participant.id]))
         .map((participant) => participant.id),
     );
   }
 
   const unissuedCount = eligibleParticipants.filter(
-    (participant) => !certificatesByParticipantId[participant.id],
+    (participant) => canIssue(certificatesByParticipantId[participant.id]),
   ).length;
 
   return (
@@ -178,7 +184,7 @@ export default function CertificateManager({ events, selectedEventId, participan
                     <input
                       type="checkbox"
                       checked={selectedIds.includes(participant.id)}
-                      disabled={Boolean(certificate)}
+                      disabled={!canIssue(certificate)}
                       onChange={(event) => toggleParticipant(participant.id, event.target.checked)}
                     />
                   </td>

@@ -54,6 +54,18 @@ export async function getCertificates(eventId) {
     .sort((left, right) => (right.createdAt ?? "").localeCompare(left.createdAt ?? ""));
 }
 
+// A participant can end up with more than one certificate doc once a
+// revoked one is reissued (the old one is kept for audit history, not
+// deleted). The admin list shows one row per participant, so pick whichever
+// certificate is actually relevant: a live PUBLISHED one wins over any
+// REVOKED one, and ties break on whichever was issued most recently.
+function isMoreRelevantCertificate(candidate, current) {
+  if (!current) return true;
+  if (candidate.status === "PUBLISHED" && current.status !== "PUBLISHED") return true;
+  if (candidate.status !== "PUBLISHED" && current.status === "PUBLISHED") return false;
+  return (candidate.createdAt ?? "") > (current.createdAt ?? "");
+}
+
 export async function getCertificatesByParticipantId(participantIds) {
   if (!participantIds.length) return {};
 
@@ -73,7 +85,9 @@ export async function getCertificatesByParticipantId(participantIds) {
   snapshots.forEach((snapshot) => {
     snapshot.docs.forEach((doc) => {
       const certificate = serializeCertificate(doc);
-      byParticipantId[certificate.participantId] = certificate;
+      if (isMoreRelevantCertificate(certificate, byParticipantId[certificate.participantId])) {
+        byParticipantId[certificate.participantId] = certificate;
+      }
     });
   });
 

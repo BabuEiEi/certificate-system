@@ -147,13 +147,29 @@ export async function issueCertificatesAction(_previousState, formData) {
     return actionState("error", "ไม่พบผู้เข้าร่วมที่มีสิทธิ์ได้รับเกียรติบัตรในรายการที่เลือก");
   }
 
+  // A REVOKED certificate doesn't block reissuing -- only a still-live
+  // PUBLISHED one does. Reissuing creates a brand new certificate doc
+  // (see issueSingleCertificate) rather than touching the revoked one, so
+  // the revoked record stays around as audit history -- but it reuses that
+  // revoked certificate's own number rather than consuming a new one, since
+  // this is a correction of the same certificate, not a new one.
   const existingCertificateSnapshots = await Promise.all(
     eligibleParticipants.map((participant) =>
-      db.collection("certificates").where("participant_id", "==", participant.id).limit(1).get(),
+      db.collection("certificates").where("participant_id", "==", participant.id).get(),
     ),
   );
+  const reuseCertificateNumberByParticipantId = {};
+  existingCertificateSnapshots.forEach((snapshot, index) => {
+    const revokedDocs = snapshot.docs
+      .map((doc) => doc.data())
+      .filter((data) => data.status === "REVOKED")
+      .sort((left, right) => (right.revoked_at?.toMillis?.() ?? 0) - (left.revoked_at?.toMillis?.() ?? 0));
+    if (revokedDocs[0]?.certificate_number) {
+      reuseCertificateNumberByParticipantId[eligibleParticipants[index].id] = revokedDocs[0].certificate_number;
+    }
+  });
   const participantsToIssue = eligibleParticipants.filter(
-    (_, index) => existingCertificateSnapshots[index].empty,
+    (_, index) => !existingCertificateSnapshots[index].docs.some((doc) => doc.data().status === "PUBLISHED"),
   );
 
   if (!participantsToIssue.length) {
@@ -198,6 +214,7 @@ export async function issueCertificatesAction(_previousState, formData) {
         signers,
         imageBuffers,
         outputFormat,
+        reuseCertificateNumber: reuseCertificateNumberByParticipantId[participant.id],
       });
       issuedCount += 1;
     } catch {
@@ -221,7 +238,7 @@ export async function issueCertificatesAction(_previousState, formData) {
   return actionState("success", `ออกเกียรติบัตรสำเร็จ ${issuedCount} ฉบับ`);
 }
 
-async function issueSingleCertificate({ db, storage, actor, event, participant, template, signers, imageBuffers, outputFormat }) {
+async function issueSingleCertificate({ db, storage, actor, event, participant, template, signers, imageBuffers, outputFormat, reuseCertificateNumber }) {
   const eventReference = db.collection("events").doc(event.id);
   // Events created before per-event numbering existed have no `next_number`
   // field yet, so they keep sharing this legacy global counter exactly as
@@ -234,39 +251,44 @@ async function issueSingleCertificate({ db, storage, actor, event, participant, 
   const verificationToken = randomUUID();
   const issuedDate = new Date();
 
-  const { certificateNumber } = await db.runTransaction(async (transaction) => {
-    const eventSnapshot = await transaction.get(eventReference);
-    const eventData = eventSnapshot.data() ?? {};
-    const hasOwnNumbering = eventData.next_number !== undefined;
+  // Reissuing a previously revoked certificate keeps its original number --
+  // that participant already "owns" it, so no new number is consumed from
+  // the counter.
+  const certificateNumber =
+    reuseCertificateNumber ??
+    (await db.runTransaction(async (transaction) => {
+      const eventSnapshot = await transaction.get(eventReference);
+      const eventData = eventSnapshot.data() ?? {};
+      const hasOwnNumbering = eventData.next_number !== undefined;
 
-    let settings = eventData;
-    if (!hasOwnNumbering) {
-      const legacySnapshot = await transaction.get(legacySettingsReference);
-      settings = legacySnapshot.data() ?? {};
-    }
+      let settings = eventData;
+      if (!hasOwnNumbering) {
+        const legacySnapshot = await transaction.get(legacySettingsReference);
+        settings = legacySnapshot.data() ?? {};
+      }
 
-    const nextNumber = Number(settings.next_number ?? 1);
-    const numberDigits = Number(settings.number_digits ?? 4);
-    const runningNumber = String(nextNumber).padStart(numberDigits, "0");
+      const nextNumber = Number(settings.next_number ?? 1);
+      const numberDigits = Number(settings.number_digits ?? 4);
+      const runningNumber = String(nextNumber).padStart(numberDigits, "0");
 
-    const formattedNumber = formatCertificateNumber({
-      displayPrefix: settings.display_prefix ?? "",
-      prefix: settings.prefix ?? "",
-      runningNumber,
-      year: settings.year ?? "",
-      separator: settings.separator ?? "/",
-      numberFormat: settings.number_format ?? "ARABIC",
-    });
+      const formattedNumber = formatCertificateNumber({
+        displayPrefix: settings.display_prefix ?? "",
+        prefix: settings.prefix ?? "",
+        runningNumber,
+        year: settings.year ?? "",
+        separator: settings.separator ?? "/",
+        numberFormat: settings.number_format ?? "ARABIC",
+      });
 
-    const counterReference = hasOwnNumbering ? eventReference : legacySettingsReference;
-    transaction.set(
-      counterReference,
-      { next_number: nextNumber + 1, updated_at: FieldValue.serverTimestamp(), updated_by: actor.id },
-      { merge: true },
-    );
+      const counterReference = hasOwnNumbering ? eventReference : legacySettingsReference;
+      transaction.set(
+        counterReference,
+        { next_number: nextNumber + 1, updated_at: FieldValue.serverTimestamp(), updated_by: actor.id },
+        { merge: true },
+      );
 
-    return { certificateNumber: formattedNumber };
-  });
+      return formattedNumber;
+    }));
 
   const { textValues, imageValues } = buildPlacementValues({
     certificateNumber,
@@ -381,16 +403,26 @@ export async function revokeCertificateAction(_previousState, formData) {
   const publishedReference = db.collection("publishedCertificates").doc(certificateId);
   const auditReference = db.collection("auditLogs").doc();
 
+  let filePathsToDelete = [];
+
   try {
     await db.runTransaction(async (transaction) => {
       const snapshot = await transaction.get(certificateReference);
       if (!snapshot.exists) throw new Error("CERTIFICATE_NOT_FOUND");
+
+      const data = snapshot.data();
+      filePathsToDelete = [data.png_path, data.pdf_path].filter(Boolean);
 
       transaction.set(
         certificateReference,
         {
           status: "REVOKED",
           revoke_reason: reason,
+          // The files are deleted from storage right after this transaction
+          // commits -- clear the paths here so the record doesn't keep
+          // pointing at bytes that no longer exist.
+          png_path: "",
+          pdf_path: "",
           revoked_at: FieldValue.serverTimestamp(),
           updated_at: FieldValue.serverTimestamp(),
           updated_by: actor.id,
@@ -402,6 +434,8 @@ export async function revokeCertificateAction(_previousState, formData) {
         {
           status: "REVOKED",
           revoke_reason: reason,
+          has_png: false,
+          has_pdf: false,
           revoked_at: FieldValue.serverTimestamp(),
         },
         { merge: true },
@@ -419,6 +453,13 @@ export async function revokeCertificateAction(_previousState, formData) {
     });
   } catch {
     return actionState("error", "ไม่สามารถยกเลิกเกียรติบัตรได้ กรุณาลองใหม่");
+  }
+
+  if (filePathsToDelete.length) {
+    const bucket = getFirebaseAdminStorage().bucket();
+    await Promise.all(
+      filePathsToDelete.map((path) => bucket.file(path).delete({ ignoreNotFound: true }).catch(() => {})),
+    );
   }
 
   revalidateCertificateViews();
