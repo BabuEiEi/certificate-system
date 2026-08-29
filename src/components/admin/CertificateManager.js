@@ -5,7 +5,7 @@ import { useMemo, useState } from "react";
 import { useActionState } from "react";
 import { issueCertificatesAction, revokeCertificateAction } from "@/app/admin/certificates/actions";
 import { CERTIFICATE_FILE_RETENTION_DAYS } from "@/lib/certificate/retention";
-import { confirmAppAction, useActionAlert } from "@/lib/sweetAlert";
+import { promptAppInput, useActionAlert } from "@/lib/sweetAlert";
 import { getCertificateTypeLabel } from "@/lib/participant";
 
 const initialActionState = { status: "idle", message: "", errors: {}, submittedAt: 0 };
@@ -63,14 +63,14 @@ function RevokeControl({ certificateId }) {
 
   async function handleSubmit(event) {
     event.preventDefault();
-    const confirmed = await confirmAppAction({
+    const { isConfirmed, value: reason } = await promptAppInput({
       title: "ยืนยันการยกเลิกเกียรติบัตร",
       message: "เกียรติบัตรนี้จะถูกทำเครื่องหมายว่ายกเลิก และแสดงสถานะนี้ในหน้าตรวจสอบสาธารณะ",
+      inputLabel: "เหตุผลการยกเลิก (ไม่บังคับ)",
       confirmButtonText: "ยกเลิกเกียรติบัตร",
     });
-    if (!confirmed) return;
+    if (!isConfirmed) return;
 
-    const reason = window.prompt("เหตุผลการยกเลิก (ไม่บังคับ)", "") ?? "";
     const formData = new FormData(event.currentTarget);
     formData.set("reason", reason);
     formAction(formData);

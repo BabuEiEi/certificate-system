@@ -83,6 +83,29 @@ export async function confirmAppAction({ title, message, confirmButtonText = "�
   return result.isConfirmed;
 }
 
+export async function promptAppInput({
+  title,
+  message,
+  inputLabel,
+  inputPlaceholder = "",
+  confirmButtonText = "ยืนยัน",
+}) {
+  const result = await showAppAlert({
+    status: "question",
+    title,
+    message,
+    input: "text",
+    inputLabel,
+    inputPlaceholder,
+    inputAttributes: { autocapitalize: "off" },
+    showCancelButton: true,
+    focusCancel: true,
+    confirmButtonText,
+  });
+
+  return { isConfirmed: result.isConfirmed, value: result.isConfirmed ? (result.value ?? "") : "" };
+}
+
 export function useActionAlert(state) {
   useEffect(() => {
     if (!state?.message || !state?.submittedAt) return;
