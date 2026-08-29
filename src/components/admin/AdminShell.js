@@ -12,7 +12,7 @@ const navigation = [
   { href: "/admin/participants", label: "ผู้รับเกียรติบัตร", mark: "ผ" },
   { href: "/admin/certificates", label: "เกียรติบัตร", mark: "C" },
   { href: "/admin/signers", label: "ผู้ลงนาม", mark: "ล" },
-  { href: "/admin/templates", label: "Template", mark: "T" },
+  { href: "/admin/templates", label: "แม่แบบ", mark: "ม" },
   { href: "/admin/logs", label: "Logs", mark: "L" },
   { href: "/admin/settings", label: "Settings", mark: "S" },
 ];

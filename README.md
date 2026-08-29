@@ -53,7 +53,7 @@ updated_at: <server timestamp>
 | `events` | กิจกรรมและสถานะ |
 | `participants` | ผู้รับเกียรติบัตร |
 | `signers` | ผู้ลงนาม |
-| `templates` | ข้อมูลแม่แบบและ Storage path |
+| `templates` | ข้อมูลแม่แบบ, Storage path และตำแหน่งข้อความ/ลายเซ็น (`placements`); document ID เท่ากับ `{eventId}__{certificateType}` |
 | `certificateSettings` | การตั้งค่าเลขที่เกียรติบัตร |
 | `certificates` | เกียรติบัตรฉบับภายใน |
 | `publishedCertificates` | snapshot สาธารณะที่ไม่มีอีเมลหรือข้อมูลภายใน; document ID เท่ากับ verification token |
@@ -93,6 +93,15 @@ updated_at: <server timestamp>
 - ไฟล์ลายเซ็นจัดเก็บใน Cloud Storage ภายใต้ `signatures/{eventId}/...` แบบ Private
 - ภาพตัวอย่างถูกส่งผ่าน `/api/admin/signers/{signerId}/image` ซึ่งตรวจ session และสิทธิ์ `ADMIN` ก่อนอ่านไฟล์
 - การเพิ่ม แก้ไข และลบผู้ลงนามบันทึกใน `auditLogs`; การแทนที่หรือลบข้อมูลจะลบไฟล์เดิมออกจาก Storage
+
+## แม่แบบเกียรติบัตร
+
+- เมนู **Template** กำหนดแม่แบบแยกตามกิจกรรมและประเภทเกียรติบัตร (`ผ่านการอบรม` และ `เข้าร่วม`) สูงสุด 2 แม่แบบต่อกิจกรรม
+- รองรับไฟล์ PNG, JPEG, WebP และ PDF ขนาดไม่เกิน 5 MB โดยตรวจชนิดไฟล์จากข้อมูลภายในไฟล์ซ้ำบนเซิร์ฟเวอร์
+- ตัวอย่างแม่แบบแสดงผลจริงในเบราว์เซอร์ (PDF ถูกแปลงเป็นภาพด้วย `pdfjs-dist` ฝั่งไคลเอนต์) พร้อมลาก/วางตำแหน่งข้อความและลายเซ็นได้โดยตรงบนภาพ
+- ตำแหน่งที่กำหนดได้ ได้แก่ เลขที่เกียรติบัตร, ชื่อผู้รับ, ชื่อกิจกรรม, วันที่ออก และชื่อ/ตำแหน่ง/ลายเซ็นของผู้ลงนามสูงสุด 3 คน โดยเก็บเป็นพิกัดร้อยละ (%) ของขนาดแม่แบบใน `templates/{eventId}__{certificateType}`
+- ไฟล์แม่แบบจัดเก็บใน Cloud Storage ภายใต้ `templates/{eventId}/{certificateType}/...` แบบ Private และเสิร์ฟผ่าน `/api/admin/templates/{templateId}/file` ซึ่งตรวจ session และสิทธิ์ `ADMIN` ก่อนอ่านไฟล์
+- การเพิ่ม แก้ไข และลบแม่แบบบันทึกใน `auditLogs`; การแทนที่หรือลบข้อมูลจะลบไฟล์เดิมออกจาก Storage
 
 ## Security Rules และ Indexes
 
