@@ -56,6 +56,24 @@ export default async function VerifyPage({ params }) {
               </div>
             ))}
           </dl>
+          {certificate.status === "PUBLISHED" ? (
+            <div className="flex flex-wrap gap-3 border-t border-slate-200 bg-slate-50 px-6 py-5 sm:px-10">
+              <a
+                href={`/api/certificates/${token}/file?format=png`}
+                target="_blank"
+                rel="noreferrer"
+                className="rounded-xl border border-brand px-4 py-2.5 text-sm font-semibold text-brand transition hover:bg-blue-50"
+              >
+                ดูตัวอย่างเกียรติบัตร
+              </a>
+              <a
+                href={`/api/certificates/${token}/file?format=pdf`}
+                className="rounded-xl bg-brand px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-dark"
+              >
+                ดาวน์โหลด PDF
+              </a>
+            </div>
+          ) : null}
         </section>
         ) : (
           <EmptyState

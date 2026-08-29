@@ -12,10 +12,13 @@
     "firebase:deploy:app": "firebase deploy --only apphosting --project certificate-system-th-2026"
   },
   "dependencies": {
+    "@napi-rs/canvas": "^1.0.8",
     "@onparallel/write-excel-file-data-validation": "^1.0.0",
+    "@pdf-lib/fontkit": "^1.1.1",
     "firebase": "12.18.0",
     "firebase-admin": "14.3.0",
     "next": "16.3.3",
+    "pdf-lib": "^1.17.1",
     "pdfjs-dist": "^6.2.108",
     "react": "19.2.8",
     "react-dom": "19.2.8",
