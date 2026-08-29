@@ -164,8 +164,15 @@ export async function issueCertificatesAction(_previousState, formData) {
       .map((doc) => doc.data())
       .filter((data) => data.status === "REVOKED")
       .sort((left, right) => (right.revoked_at?.toMillis?.() ?? 0) - (left.revoked_at?.toMillis?.() ?? 0));
-    if (revokedDocs[0]?.certificate_number) {
-      reuseCertificateNumberByParticipantId[eligibleParticipants[index].id] = revokedDocs[0].certificate_number;
+    // Only reuse a number that actually looks properly formatted (has a
+    // prefix/label in it, e.g. "เลขที่ สทศ.๐๐๐๗/๒๕๖๙") -- some legacy
+    // certificates were issued before per-event numbering existed and ended
+    // up with a bare "0012/" (no prefix, no year). Reusing that verbatim
+    // would just perpetuate the old formatting bug forever, so those fall
+    // through to getting a fresh, correctly formatted number instead.
+    const candidateNumber = revokedDocs[0]?.certificate_number ?? "";
+    if (/[ก-๙a-zA-Z]/.test(candidateNumber)) {
+      reuseCertificateNumberByParticipantId[eligibleParticipants[index].id] = candidateNumber;
     }
   });
   const participantsToIssue = eligibleParticipants.filter(
