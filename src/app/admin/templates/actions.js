@@ -8,6 +8,10 @@ import { requireStaff } from "@/lib/auth";
 import { createAuditLogData } from "@/lib/audit";
 import { getFirebaseAdminDb, getFirebaseAdminStorage } from "@/lib/firebase/admin";
 import {
+  CERTIFICATE_FONT_FAMILY_VALUES,
+  CERTIFICATE_FONT_WEIGHT_VALUES,
+} from "@/lib/certificateFonts";
+import {
   TEMPLATE_CERTIFICATE_TYPE_VALUES,
   getTemplateCertificateTypeLabel,
   normalizePlacements,
@@ -18,6 +22,8 @@ const documentIdSchema = z.string().trim().min(1).max(128).regex(/^[A-Za-z0-9_-]
 const templateSchema = z.object({
   eventId: documentIdSchema,
   certificateType: z.enum(TEMPLATE_CERTIFICATE_TYPE_VALUES),
+  fontFamily: z.enum(CERTIFICATE_FONT_FAMILY_VALUES),
+  fontWeight: z.enum(CERTIFICATE_FONT_WEIGHT_VALUES),
 });
 
 function actionState(status, message, errors = {}) {
@@ -107,6 +113,8 @@ export async function saveTemplateAction(_previousState, formData) {
   const parsed = templateSchema.safeParse({
     eventId: formData.get("eventId"),
     certificateType: formData.get("certificateType"),
+    fontFamily: formData.get("fontFamily"),
+    fontWeight: formData.get("fontWeight"),
   });
 
   if (!parsed.success) {
@@ -189,6 +197,8 @@ export async function saveTemplateAction(_previousState, formData) {
     const templateDocument = {
       event_id: data.eventId,
       certificate_type: data.certificateType,
+      font_family: data.fontFamily,
+      font_weight: data.fontWeight,
       file_path: uploadedPath || previousData.file_path,
       file_content_type: templateFile.file?.contentType || previousData.file_content_type || "",
       file_size: templateFile.file?.size || previousData.file_size || 0,
@@ -216,6 +226,8 @@ export async function saveTemplateAction(_previousState, formData) {
           eventName: eventSnapshot.data()?.name ?? "",
           certificateType: data.certificateType,
           certificateTypeLabel: getTemplateCertificateTypeLabel(data.certificateType),
+          fontFamily: data.fontFamily,
+          fontWeight: data.fontWeight,
         },
       }),
     );

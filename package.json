@@ -7,6 +7,7 @@
     "build": "next build --webpack",
     "start": "next start",
     "lint": "eslint",
+    "test": "node --no-warnings --test tests/*.test.mjs",
     "firebase:emulators": "firebase emulators:start --project certificate-system-th-2026",
     "firebase:deploy:rules": "firebase deploy --only firestore:rules,firestore:indexes,storage --project certificate-system-th-2026",
     "firebase:deploy:app": "firebase deploy --only apphosting --project certificate-system-th-2026"

@@ -1,6 +1,10 @@
 import "server-only";
 
 import { getFirebaseAdminDb } from "@/lib/firebase/admin";
+import {
+  normalizeCertificateFontFamily,
+  normalizeCertificateFontWeight,
+} from "@/lib/certificateFonts";
 import { normalizePlacements } from "@/lib/templateFields";
 
 function serializeTimestamp(value) {
@@ -18,6 +22,8 @@ function serializeTemplate(snapshot) {
     id: snapshot.id,
     eventId: data.event_id ?? "",
     certificateType: data.certificate_type ?? "",
+    fontFamily: normalizeCertificateFontFamily(data.font_family),
+    fontWeight: normalizeCertificateFontWeight(data.font_weight),
     fileContentType: data.file_content_type ?? "",
     fileSize: Number(data.file_size ?? 0),
     fileKind: data.file_content_type === "application/pdf" ? "pdf" : "image",

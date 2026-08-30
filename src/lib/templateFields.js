@@ -1,4 +1,4 @@
-import { certificateTypeOptions } from "@/lib/participant";
+import { certificateTypeOptions } from "./participant.js";
 
 // Templates are managed per certificate type so an event can have one design
 // for "ผ่านการอบรม" and another for "เข้าร่วม" (the "" / follow-template value
@@ -31,6 +31,11 @@ export const TEMPLATE_PLACEMENT_FIELDS = [
 ];
 
 export const TEMPLATE_PLACEMENT_FIELD_IDS = TEMPLATE_PLACEMENT_FIELDS.map((field) => field.id);
+
+export const REQUIRED_CERTIFICATE_PLACEMENT_FIELD_IDS = [
+  "certificate_number",
+  "recipient_name",
+];
 
 export function getTemplateField(id) {
   return TEMPLATE_PLACEMENT_FIELDS.find((field) => field.id === id) ?? null;
@@ -72,7 +77,14 @@ export function defaultPlacementFor(fieldId) {
 // the client) into a map keyed by field id, dropping unknown fields and
 // filling in any missing numbers with sane defaults.
 export function normalizePlacements(rawPlacements) {
-  const list = Array.isArray(rawPlacements) ? rawPlacements : [];
+  const list = Array.isArray(rawPlacements)
+    ? rawPlacements
+    : rawPlacements && typeof rawPlacements === "object"
+      ? Object.entries(rawPlacements).map(([fieldId, entry]) => ({
+          ...(entry && typeof entry === "object" ? entry : {}),
+          field: entry?.field ?? fieldId,
+        }))
+      : [];
   const map = {};
 
   for (const entry of list) {
@@ -100,6 +112,10 @@ export function normalizePlacements(rawPlacements) {
   }
 
   return map;
+}
+
+export function getMissingRequiredCertificatePlacements(placements) {
+  return REQUIRED_CERTIFICATE_PLACEMENT_FIELD_IDS.filter((fieldId) => !placements?.[fieldId]);
 }
 
 function clampPercent(value, fallback) {

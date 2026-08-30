@@ -3,9 +3,13 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { useActionState } from "react";
-import { issueCertificatesAction, revokeCertificateAction } from "@/app/admin/certificates/actions";
+import {
+  issueCertificatesAction,
+  repairCertificateFileAction,
+  revokeCertificateAction,
+} from "@/app/admin/certificates/actions";
 import { CERTIFICATE_FILE_RETENTION_DAYS } from "@/lib/certificate/retention";
-import { promptAppInput, useActionAlert } from "@/lib/sweetAlert";
+import { confirmAppAction, promptAppInput, useActionAlert } from "@/lib/sweetAlert";
 import { getCertificateTypeLabel } from "@/lib/participant";
 
 const initialActionState = { status: "idle", message: "", errors: {}, submittedAt: 0 };
@@ -89,6 +93,40 @@ function RevokeControl({ certificateId }) {
         className="rounded-lg border border-rose-200 px-3 py-1.5 text-xs font-semibold text-rose-600 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"
       >
         {pending ? "กำลังยกเลิก…" : "ยกเลิก"}
+      </button>
+    </form>
+  );
+}
+
+function RepairControl({ certificateId }) {
+  const [state, formAction, pending] = useActionState(
+    repairCertificateFileAction,
+    initialActionState,
+  );
+  useActionAlert(state);
+
+  async function handleSubmit(event) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const confirmed = await confirmAppAction({
+      title: "ซ่อมไฟล์เกียรติบัตร",
+      message: "ระบบจะสร้างไฟล์ใหม่จากแม่แบบและข้อมูลผู้ลงนามปัจจุบัน โดยคงเลขที่ วันออก และลิงก์ตรวจสอบเดิมไว้",
+      confirmButtonText: "ซ่อมไฟล์",
+    });
+    if (!confirmed) return;
+
+    formAction(new FormData(form));
+  }
+
+  return (
+    <form onSubmit={handleSubmit}>
+      <input type="hidden" name="certificateId" value={certificateId} />
+      <button
+        type="submit"
+        disabled={pending}
+        className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-700 transition hover:bg-amber-100 disabled:cursor-wait disabled:opacity-50"
+      >
+        {pending ? "กำลังซ่อม…" : "ซ่อมไฟล์"}
       </button>
     </form>
   );
@@ -224,7 +262,10 @@ export default function CertificateManager({ events, selectedEventId, participan
                             </>
                           )}
                           {certificate.status === "PUBLISHED" ? (
-                            <RevokeControl certificateId={certificate.id} />
+                            <>
+                              <RepairControl certificateId={certificate.id} />
+                              <RevokeControl certificateId={certificate.id} />
+                            </>
                           ) : null}
                         </>
                       ) : null}

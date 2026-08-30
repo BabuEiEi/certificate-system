@@ -24,7 +24,7 @@ export default async function CertificatesPage({ searchParams }) {
         <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">ออกเกียรติบัตร</h1>
         <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
           เลือกผู้เข้าร่วมที่มีสิทธิ์ได้รับเกียรติบัตรเพื่อออกเกียรติบัตรแบบเลือกได้หลายรายการ
-          ระบบจะสร้างไฟล์ PNG และ PDF พร้อมเผยแพร่สู่หน้าตรวจสอบสาธารณะโดยอัตโนมัติ
+          ระบบจะสร้างไฟล์ตามรูปแบบที่เลือกและเผยแพร่สู่หน้าตรวจสอบสาธารณะโดยอัตโนมัติ
         </p>
       </div>
       <CertificateManager

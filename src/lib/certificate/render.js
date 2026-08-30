@@ -3,6 +3,11 @@ import "server-only";
 import path from "node:path";
 import { GlobalFonts, createCanvas, loadImage } from "@napi-rs/canvas";
 import { PDFDocument } from "pdf-lib";
+import {
+  getCertificateFont,
+  normalizeCertificateFontFamily,
+  normalizeCertificateFontWeight,
+} from "../certificateFonts.js";
 
 // PDF templates are rasterized before compositing. This MUST match the scale
 // used by the admin's live preview in TemplateManager (pdfjs render scale 2)
@@ -11,20 +16,28 @@ import { PDFDocument } from "pdf-lib";
 // size on the final, server-rendered certificate.
 const PDF_TEMPLATE_RENDER_SCALE = 2;
 
-const THAI_FONT_FAMILY = "NotoSansThaiCertificate";
-const THAI_FONT_PATH = path.join(process.cwd(), "src/lib/certificate/fonts/NotoSansThai-Regular.ttf");
+const CERTIFICATE_FONT_DIRECTORY = path.join(process.cwd(), "src/lib/certificate/fonts");
+const registeredFonts = new Map();
 
-let fontsRegistered = false;
+function ensureFontRegistered(fontFamily, fontWeight) {
+  const normalizedFamily = normalizeCertificateFontFamily(fontFamily);
+  const normalizedWeight = normalizeCertificateFontWeight(fontWeight);
+  const registrationKey = `${normalizedFamily}:${normalizedWeight}`;
+  const existingFamily = registeredFonts.get(registrationKey);
+  if (existingFamily) return existingFamily;
 
-function ensureFontsRegistered() {
-  if (fontsRegistered) return;
-  GlobalFonts.registerFromPath(THAI_FONT_PATH, THAI_FONT_FAMILY);
-  fontsRegistered = true;
+  const font = getCertificateFont(normalizedFamily);
+  const fontPath = path.join(CERTIFICATE_FONT_DIRECTORY, font.files[normalizedWeight]);
+  const canvasFamily = `Certificate${normalizedFamily}${normalizedWeight}`;
+  const registeredFont = GlobalFonts.registerFromPath(fontPath, canvasFamily);
+  if (!registeredFont) {
+    throw new Error(`Unable to register certificate font: ${fontPath}`);
+  }
+  registeredFonts.set(registrationKey, canvasFamily);
+  return canvasFamily;
 }
 
 async function rasterizeCanvasFromTemplate(templateBuffer, templateContentType) {
-  ensureFontsRegistered();
-
   if (templateContentType === "application/pdf") {
     // Loaded lazily because pdfjs-dist's legacy Node build touches DOM-ish
     // globals during module init that we don't want paid for on every import.
@@ -49,7 +62,7 @@ async function rasterizeCanvasFromTemplate(templateBuffer, templateContentType) 
   return canvas;
 }
 
-function drawTextPlacement(context, canvasWidth, canvasHeight, placement, text) {
+function drawTextPlacement(context, canvasWidth, canvasHeight, placement, text, canvasFontFamily) {
   if (!text) return;
 
   const x = (placement.xPercent / 100) * canvasWidth;
@@ -60,7 +73,7 @@ function drawTextPlacement(context, canvasWidth, canvasHeight, placement, text) 
   const fontSize = Math.max(1, Math.round(placement.fontSize));
 
   context.save();
-  context.font = `${fontSize}px "${THAI_FONT_FAMILY}"`;
+  context.font = `${fontSize}px "${canvasFontFamily}"`;
   context.fillStyle = "#111111";
   context.textBaseline = "middle";
   context.textAlign = placement.align === "left"
@@ -105,6 +118,8 @@ async function drawImagePlacement(context, canvasWidth, canvasHeight, placement,
  * @param {Record<string, object>} options.placements - Field id -> placement, as produced by normalizePlacements().
  * @param {Record<string, string>} options.textValues - Field id -> text content for text fields.
  * @param {Record<string, Buffer>} options.imageValues - Field id -> image bytes for image fields (e.g. signatures).
+ * @param {string} options.fontFamily - A value from CERTIFICATE_FONT_FAMILY_VALUES.
+ * @param {string} options.fontWeight - A value from CERTIFICATE_FONT_WEIGHT_VALUES.
  * @returns {Promise<{ pngBuffer: Buffer, width: number, height: number }>}
  */
 export async function composeCertificateImage({
@@ -113,7 +128,14 @@ export async function composeCertificateImage({
   placements,
   textValues = {},
   imageValues = {},
+  fontFamily,
+  fontWeight,
 }) {
+  if (!placements || typeof placements !== "object" || Array.isArray(placements)) {
+    throw new TypeError("Certificate placements must be a map keyed by template field ID");
+  }
+
+  const canvasFontFamily = ensureFontRegistered(fontFamily, fontWeight);
   const canvas = await rasterizeCanvasFromTemplate(templateBuffer, templateContentType);
   const context = canvas.getContext("2d");
   const width = canvas.width;
@@ -124,7 +146,7 @@ export async function composeCertificateImage({
        
       await drawImagePlacement(context, width, height, placement, imageValues[fieldId]);
     } else {
-      drawTextPlacement(context, width, height, placement, textValues[fieldId]);
+      drawTextPlacement(context, width, height, placement, textValues[fieldId], canvasFontFamily);
     }
   }
 

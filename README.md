@@ -56,7 +56,7 @@ updated_at: <server timestamp>
 | `templates` | ข้อมูลแม่แบบ, Storage path และตำแหน่งข้อความ/ลายเซ็น (`placements`); document ID เท่ากับ `{eventId}__{certificateType}` |
 | `certificateSettings` | การตั้งค่าเลขที่เกียรติบัตร |
 | `certificates` | เกียรติบัตรฉบับภายใน |
-| `publishedCertificates` | snapshot สาธารณะที่ไม่มีอีเมลหรือข้อมูลภายใน; document ID เท่ากับ verification token |
+| `publishedCertificates` | snapshot สาธารณะที่ไม่มีอีเมลหรือข้อมูลภายใน; document ID เท่ากับ certificate ID และค้นลิงก์ด้วย `verification_token` |
 | `auditLogs` | ประวัติการทำรายการ |
 
 เอกสาร `publishedCertificates` ต้องมี `search_terms` ซึ่งสร้างได้ด้วย `createSearchTerms()` ใน `src/lib/firebase/search.js` เพื่อรองรับการค้นหาชื่อและเลขที่เกียรติบัตร
@@ -97,10 +97,13 @@ updated_at: <server timestamp>
 ## แม่แบบเกียรติบัตร
 
 - เมนู **Template** กำหนดแม่แบบแยกตามกิจกรรมและประเภทเกียรติบัตร (`ผ่านการอบรม` และ `เข้าร่วม`) สูงสุด 2 แม่แบบต่อกิจกรรม
-- รองรับไฟล์ PNG, JPEG, WebP และ PDF ขนาดไม่เกิน 5 MB โดยตรวจชนิดไฟล์จากข้อมูลภายในไฟล์ซ้ำบนเซิร์ฟเวอร์
-- ตัวอย่างแม่แบบแสดงผลจริงในเบราว์เซอร์ (PDF ถูกแปลงเป็นภาพด้วย `pdfjs-dist` ฝั่งไคลเอนต์) พร้อมลาก/วางตำแหน่งข้อความและลายเซ็นได้โดยตรงบนภาพ
+- รองรับการอัปโหลดแม่แบบใหม่เป็น PNG หรือ JPEG ขนาดไม่เกิน 5 MB โดยตรวจชนิดไฟล์จากข้อมูลภายในไฟล์ซ้ำบนเซิร์ฟเวอร์
+- ตัวอย่างแม่แบบแสดงผลจริงในเบราว์เซอร์ พร้อมลาก/วางตำแหน่งข้อความและลายเซ็นได้โดยตรงบนภาพ
+- เลือกฟอนต์สำหรับแต่ละแม่แบบได้ 4 ตระกูล ได้แก่ Noto Sans Thai, Sarabun, Kanit และ Prompt พร้อมน้ำหนัก Regular/Bold โดย Preview, PNG และ PDF ใช้ไฟล์ฟอนต์ชุดเดียวกัน
+- แม่แบบที่สร้างก่อนมีตัวเลือกฟอนต์จะใช้ Noto Sans Thai Regular เป็นค่าเริ่มต้นโดยอัตโนมัติ
 - ตำแหน่งที่กำหนดได้ ได้แก่ เลขที่เกียรติบัตร, ชื่อผู้รับ, ชื่อกิจกรรม, วันที่ออก และชื่อ/ตำแหน่ง/ลายเซ็นของผู้ลงนามสูงสุด 3 คน โดยเก็บเป็นพิกัดร้อยละ (%) ของขนาดแม่แบบใน `templates/{eventId}__{certificateType}`
 - ไฟล์แม่แบบจัดเก็บใน Cloud Storage ภายใต้ `templates/{eventId}/{certificateType}/...` แบบ Private และเสิร์ฟผ่าน `/api/admin/templates/{templateId}/file` ซึ่งตรวจ session และสิทธิ์ `ADMIN` ก่อนอ่านไฟล์
+- เกียรติบัตรที่เผยแพร่แล้วสามารถสั่ง “ซ่อมไฟล์” เพื่อ render ใหม่จากแม่แบบปัจจุบัน โดยคงเลขที่ วันออก และ verification token เดิม
 - การเพิ่ม แก้ไข และลบแม่แบบบันทึกใน `auditLogs`; การแทนที่หรือลบข้อมูลจะลบไฟล์เดิมออกจาก Storage
 
 ## Security Rules และ Indexes
@@ -139,6 +142,7 @@ npm run firebase:deploy:app
 
 ```bash
 npm run lint
+npm test
 npm run build
 npm run firebase:deploy:app
 npm run firebase:emulators

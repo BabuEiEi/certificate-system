@@ -10,6 +10,15 @@ import { getFirebaseAdminDb, getFirebaseAdminStorage } from "@/lib/firebase/admi
 import { createSearchTerms } from "@/lib/firebase/search";
 import { formatCertificateNumber } from "@/lib/certificateNumber";
 import { composeCertificateImage, buildCertificatePdf } from "@/lib/certificate/render";
+import {
+  normalizeCertificateFontFamily,
+  normalizeCertificateFontWeight,
+} from "@/lib/certificateFonts";
+import {
+  getMissingRequiredCertificatePlacements,
+  getTemplateFieldLabel,
+  normalizePlacements,
+} from "@/lib/templateFields";
 
 const documentIdSchema = z.string().trim().min(1).max(128).regex(/^[A-Za-z0-9_-]+$/);
 const issueSchema = z.object({
@@ -21,6 +30,7 @@ const revokeSchema = z.object({
   certificateId: documentIdSchema,
   reason: z.string().trim().max(500).optional().default(""),
 });
+const repairSchema = z.object({ certificateId: documentIdSchema });
 
 function actionState(status, message, errors = {}) {
   return { status, message, errors, submittedAt: Date.now() };
@@ -33,7 +43,30 @@ function revalidateCertificateViews() {
 }
 
 function formatIssuedDate(date) {
-  return new Intl.DateTimeFormat("th-TH", { dateStyle: "long" }).format(date);
+  return new Intl.DateTimeFormat("th-TH", {
+    dateStyle: "long",
+    timeZone: "Asia/Bangkok",
+  }).format(date);
+}
+
+function getRenderablePlacements(rawPlacements) {
+  const placements = normalizePlacements(rawPlacements);
+  const missingFields = getMissingRequiredCertificatePlacements(placements);
+
+  if (missingFields.length) {
+    const error = new Error(
+      `แม่แบบยังไม่ได้กำหนดตำแหน่งฟิลด์ที่จำเป็น: ${missingFields.map(getTemplateFieldLabel).join(", ")}`,
+    );
+    error.code = "TEMPLATE_MISSING_REQUIRED_PLACEMENTS";
+    throw error;
+  }
+
+  return placements;
+}
+
+function firestoreTimestampToDate(value) {
+  const date = typeof value?.toDate === "function" ? value.toDate() : new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
 }
 
 async function resolveTemplateForParticipant(db, eventId, certificateType, templateCache) {
@@ -188,6 +221,7 @@ export async function issueCertificatesAction(_previousState, formData) {
 
   let issuedCount = 0;
   const failures = [];
+  const templateErrors = new Set();
 
   for (const participant of participantsToIssue) {
     // Sequential on purpose: each iteration performs a transactional
@@ -224,7 +258,15 @@ export async function issueCertificatesAction(_previousState, formData) {
         reuseCertificateNumber: reuseCertificateNumberByParticipantId[participant.id],
       });
       issuedCount += 1;
-    } catch {
+    } catch (error) {
+      console.error("Certificate issuance failed", {
+        eventId,
+        participantId: participant.id,
+        error,
+      });
+      if (error?.code === "TEMPLATE_MISSING_REQUIRED_PLACEMENTS") {
+        templateErrors.add(error.message);
+      }
       failures.push(participant.full_name || participant.id);
     }
   }
@@ -232,7 +274,12 @@ export async function issueCertificatesAction(_previousState, formData) {
   revalidateCertificateViews();
 
   if (!issuedCount) {
-    return actionState("error", "ไม่สามารถออกเกียรติบัตรได้ กรุณาตรวจสอบแม่แบบและลองใหม่");
+    return actionState(
+      "error",
+      templateErrors.size
+        ? [...templateErrors].join("\n")
+        : "ไม่สามารถออกเกียรติบัตรได้ กรุณาตรวจสอบแม่แบบและลองใหม่",
+    );
   }
 
   if (failures.length) {
@@ -246,6 +293,12 @@ export async function issueCertificatesAction(_previousState, formData) {
 }
 
 async function issueSingleCertificate({ db, storage, actor, event, participant, template, signers, imageBuffers, outputFormat, reuseCertificateNumber }) {
+  // Firestore stores placements as an array, while the renderer intentionally
+  // accepts only a field-id keyed map. Normalize at this boundary before a
+  // certificate number is consumed or a file is created.
+  const placements = getRenderablePlacements(template.placements);
+  const fontFamily = normalizeCertificateFontFamily(template.font_family);
+  const fontWeight = normalizeCertificateFontWeight(template.font_weight);
   const eventReference = db.collection("events").doc(event.id);
   // Events created before per-event numbering existed have no `next_number`
   // field yet, so they keep sharing this legacy global counter exactly as
@@ -312,9 +365,11 @@ async function issueSingleCertificate({ db, storage, actor, event, participant, 
   const { pngBuffer, width, height } = await composeCertificateImage({
     templateBuffer,
     templateContentType: template.file_content_type,
-    placements: template.placements,
+    placements,
     textValues,
     imageValues,
+    fontFamily,
+    fontWeight,
   });
 
   // Only the format the admin chose is rendered, uploaded, and stored --
@@ -344,6 +399,8 @@ async function issueSingleCertificate({ db, storage, actor, event, participant, 
     certificate_type: participant.certificate_type || template.certificate_type,
     certificate_number: certificateNumber,
     recipient_name: participant.full_name,
+    font_family: fontFamily,
+    font_weight: fontWeight,
     status: "PUBLISHED",
     verification_token: verificationToken,
     png_path: pngPath,
@@ -391,6 +448,161 @@ async function issueSingleCertificate({ db, storage, actor, event, participant, 
   );
 
   await batch.commit();
+}
+
+export async function repairCertificateFileAction(_previousState, formData) {
+  const actor = await requireStaff();
+  const parsed = repairSchema.safeParse({ certificateId: formData.get("certificateId") });
+
+  if (!parsed.success) {
+    return actionState("error", "ข้อมูลเกียรติบัตรที่ต้องการซ่อมไม่ถูกต้อง");
+  }
+
+  const { certificateId } = parsed.data;
+  const db = getFirebaseAdminDb();
+  const storage = getFirebaseAdminStorage();
+  const certificateReference = db.collection("certificates").doc(certificateId);
+  const publishedReference = db.collection("publishedCertificates").doc(certificateId);
+
+  try {
+    const [certificateSnapshot, publishedSnapshot] = await Promise.all([
+      certificateReference.get(),
+      publishedReference.get(),
+    ]);
+
+    if (!certificateSnapshot.exists || !publishedSnapshot.exists) {
+      return actionState("error", "ไม่พบข้อมูลเกียรติบัตรที่ต้องการซ่อม");
+    }
+
+    const certificateData = certificateSnapshot.data();
+    const publishedData = publishedSnapshot.data();
+
+    if (certificateData.status !== "PUBLISHED" || publishedData.status !== "PUBLISHED") {
+      return actionState("error", "ซ่อมได้เฉพาะเกียรติบัตรที่กำลังเผยแพร่เท่านั้น");
+    }
+
+    if (!certificateData.certificate_number || !certificateData.recipient_name) {
+      return actionState("error", "ข้อมูลเลขที่เกียรติบัตรหรือชื่อผู้รับเดิมไม่ครบถ้วน");
+    }
+
+    const outputPaths = [certificateData.png_path, certificateData.pdf_path].filter(Boolean);
+    if (!outputPaths.length) {
+      return actionState("error", "เกียรติบัตรนี้ไม่มีตำแหน่งไฟล์เดิมสำหรับซ่อม");
+    }
+
+    const templateId = `${certificateData.event_id}__${certificateData.certificate_type}`;
+    const [eventSnapshot, templateSnapshot, signerData] = await Promise.all([
+      db.collection("events").doc(certificateData.event_id).get(),
+      db.collection("templates").doc(templateId).get(),
+      loadSignerImageBuffers(db, storage, certificateData.event_id),
+    ]);
+
+    if (!eventSnapshot.exists || !templateSnapshot.exists) {
+      return actionState("error", "ไม่พบกิจกรรมหรือแม่แบบที่ใช้สร้างเกียรติบัตรนี้");
+    }
+
+    const issuedDate = firestoreTimestampToDate(certificateData.issued_at);
+    if (!issuedDate) {
+      return actionState("error", "ไม่พบวันที่ออกเดิม จึงไม่สามารถซ่อมไฟล์โดยคงข้อมูลเดิมได้");
+    }
+
+    const templateData = templateSnapshot.data();
+    const placements = getRenderablePlacements(templateData.placements);
+    const fontFamily = normalizeCertificateFontFamily(templateData.font_family);
+    const fontWeight = normalizeCertificateFontWeight(templateData.font_weight);
+    const eventData = eventSnapshot.data();
+    const { textValues, imageValues } = buildPlacementValues({
+      certificateNumber: certificateData.certificate_number,
+      participant: { full_name: certificateData.recipient_name },
+      event: { name: publishedData.event_name || eventData.name || "" },
+      signers: signerData.signers,
+      imageBuffers: signerData.imageBuffers,
+      issuedDate,
+    });
+
+    const bucket = storage.bucket();
+    const [templateBuffer] = await bucket.file(templateData.file_path).download();
+    const { pngBuffer, width, height } = await composeCertificateImage({
+      templateBuffer,
+      templateContentType: templateData.file_content_type,
+      placements,
+      textValues,
+      imageValues,
+      fontFamily,
+      fontWeight,
+    });
+
+    const uploads = [];
+    if (certificateData.png_path) {
+      uploads.push(
+        bucket.file(certificateData.png_path).save(pngBuffer, {
+          resumable: false,
+          metadata: { contentType: "image/png", cacheControl: "private, no-store" },
+        }),
+      );
+    }
+    if (certificateData.pdf_path) {
+      const pdfBuffer = await buildCertificatePdf({ pngBuffer, width, height });
+      uploads.push(
+        bucket.file(certificateData.pdf_path).save(pdfBuffer, {
+          resumable: false,
+          metadata: { contentType: "application/pdf", cacheControl: "private, no-store" },
+        }),
+      );
+    }
+    await Promise.all(uploads);
+
+    const batch = db.batch();
+    batch.set(
+      certificateReference,
+      {
+        repaired_at: FieldValue.serverTimestamp(),
+        font_family: fontFamily,
+        font_weight: fontWeight,
+        updated_at: FieldValue.serverTimestamp(),
+        updated_by: actor.id,
+      },
+      { merge: true },
+    );
+    batch.set(
+      publishedReference,
+      {
+        has_png: Boolean(certificateData.png_path),
+        has_pdf: Boolean(certificateData.pdf_path),
+        repaired_at: FieldValue.serverTimestamp(),
+      },
+      { merge: true },
+    );
+    batch.set(
+      db.collection("auditLogs").doc(),
+      createAuditLogData({
+        action: "CERTIFICATE_FILE_REPAIRED",
+        actor,
+        entityId: certificateId,
+        entityType: "CERTIFICATE",
+        metadata: {
+          event_id: certificateData.event_id,
+          participant_id: certificateData.participant_id,
+          certificate_number: certificateData.certificate_number,
+        },
+      }),
+    );
+    await batch.commit();
+  } catch (error) {
+    console.error("Certificate file repair failed", { certificateId, error });
+    return actionState(
+      "error",
+      error?.code === "TEMPLATE_MISSING_REQUIRED_PLACEMENTS"
+        ? error.message
+        : "ไม่สามารถซ่อมไฟล์เกียรติบัตรได้ กรุณาตรวจสอบแม่แบบและลองใหม่",
+    );
+  }
+
+  revalidateCertificateViews();
+  return actionState(
+    "success",
+    "ซ่อมไฟล์เกียรติบัตรเรียบร้อยแล้ว โดยคงเลขที่ วันออก และลิงก์ตรวจสอบเดิม",
+  );
 }
 
 export async function revokeCertificateAction(_previousState, formData) {

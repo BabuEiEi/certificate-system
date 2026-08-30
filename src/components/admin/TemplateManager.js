@@ -14,6 +14,14 @@ import {
   useActionAlert,
 } from "@/lib/sweetAlert";
 import {
+  CERTIFICATE_FONT_OPTIONS,
+  CERTIFICATE_FONT_WEIGHTS,
+  DEFAULT_CERTIFICATE_FONT_FAMILY,
+  DEFAULT_CERTIFICATE_FONT_WEIGHT,
+  getCertificateFont,
+  getCertificateFontWeight,
+} from "@/lib/certificateFonts";
+import {
   TEMPLATE_CERTIFICATE_TYPES,
   TEMPLATE_PLACEMENT_FIELDS,
   TEXT_ALIGN_OPTIONS,
@@ -33,7 +41,7 @@ const smallInputClassName =
   "h-9 w-full rounded-lg border border-slate-200 bg-white px-2 text-xs text-slate-800 outline-none transition focus:border-brand focus:ring-2 focus:ring-blue-100";
 
 function FieldErrors({ errors }) {
-  const messages = ["certificateType", "file"]
+  const messages = ["certificateType", "fontFamily", "fontWeight", "file"]
     .flatMap((field) => errors?.[field] ?? [])
     .filter(Boolean);
 
@@ -138,7 +146,7 @@ function TemplatePdfPreview({ source, onSize }) {
   return <canvas ref={canvasRef} className="absolute inset-0 h-full w-full object-contain" />;
 }
 
-function PlacementMarker({ field, placement, onDrag, onDragEnd }) {
+function PlacementMarker({ field, placement, onDrag, onDragEnd, textStyle }) {
   function handlePointerDown(event) {
     event.preventDefault();
     event.currentTarget.setPointerCapture(event.pointerId);
@@ -165,7 +173,11 @@ function PlacementMarker({ field, placement, onDrag, onDragEnd }) {
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
       onPointerCancel={handlePointerUp}
-      style={{ left: `${placement.xPercent}%`, top: `${placement.yPercent}%` }}
+      style={{
+        left: `${placement.xPercent}%`,
+        top: `${placement.yPercent}%`,
+        ...(isImage ? {} : textStyle),
+      }}
       className={`absolute -translate-x-1/2 -translate-y-1/2 cursor-grab touch-none select-none whitespace-nowrap rounded-full border-2 border-white px-2.5 py-1 text-[10px] font-bold text-white shadow-lg active:cursor-grabbing ${
         isImage ? "bg-gold" : "bg-brand"
       }`}
@@ -188,6 +200,12 @@ function TemplateSlot({ eventId, certificateType, typeLabel, template }) {
   const [pendingFile, setPendingFile] = useState({ file: null, resetVersion: 0 });
   const [naturalSize, setNaturalSize] = useState(null);
   const [placements, setPlacements] = useState(() => ({ ...(template?.placements ?? {}) }));
+  const [fontFamily, setFontFamily] = useState(
+    () => template?.fontFamily ?? DEFAULT_CERTIFICATE_FONT_FAMILY,
+  );
+  const [fontWeight, setFontWeight] = useState(
+    () => template?.fontWeight ?? DEFAULT_CERTIFICATE_FONT_WEIGHT,
+  );
 
   const resetVersion = saveState.status === "success" ? saveState.submittedAt : 0;
   const selectedFile = pendingFile.resetVersion === resetVersion ? pendingFile.file : null;
@@ -266,6 +284,12 @@ function TemplateSlot({ eventId, certificateType, typeLabel, template }) {
   const hasPreview = Boolean(previewSource);
   const aspectRatio = naturalSize ? `${naturalSize.width} / ${naturalSize.height}` : FALLBACK_ASPECT_RATIO;
   const enabledFields = TEMPLATE_PLACEMENT_FIELDS.filter((field) => placements[field.id]);
+  const selectedFont = getCertificateFont(fontFamily);
+  const selectedFontWeight = getCertificateFontWeight(fontWeight);
+  const certificateFontStyle = {
+    fontFamily: `var(${selectedFont.cssVariable})`,
+    fontWeight: selectedFontWeight.cssWeight,
+  };
   const placementsPayload = JSON.stringify(
     TEMPLATE_PLACEMENT_FIELDS
       .filter((field) => placements[field.id])
@@ -307,6 +331,43 @@ function TemplateSlot({ eventId, certificateType, typeLabel, template }) {
 
         <FieldErrors errors={saveState.errors} />
 
+        <section className="rounded-xl border border-blue-100 bg-blue-50/50 p-4">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label className="text-xs font-semibold text-slate-700">
+              ฟอนต์บนเกียรติบัตร
+              <select
+                name="fontFamily"
+                className={inputClassName}
+                value={fontFamily}
+                onChange={(event) => setFontFamily(event.target.value)}
+              >
+                {CERTIFICATE_FONT_OPTIONS.map((font) => (
+                  <option key={font.value} value={font.value}>{font.label}</option>
+                ))}
+              </select>
+            </label>
+            <label className="text-xs font-semibold text-slate-700">
+              น้ำหนักตัวอักษร
+              <select
+                name="fontWeight"
+                className={inputClassName}
+                value={fontWeight}
+                onChange={(event) => setFontWeight(event.target.value)}
+              >
+                {CERTIFICATE_FONT_WEIGHTS.map((weight) => (
+                  <option key={weight.value} value={weight.value}>{weight.label}</option>
+                ))}
+              </select>
+            </label>
+          </div>
+          <div className="mt-4 rounded-lg border border-white bg-white/90 px-4 py-3 text-center text-slate-800 shadow-sm">
+            <p className="text-[11px] text-slate-400">ตัวอย่างฟอนต์ที่จะใช้ใน PNG และ PDF</p>
+            <p className="mt-1 text-xl" style={certificateFontStyle}>
+              นายทดสอบ ระบบเกียรติบัตร · เลขที่ สทศ.๑๐๑๕/๒๕๖๙
+            </p>
+          </div>
+        </section>
+
         <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_300px]">
           <div>
             <p className="mb-2 text-xs font-bold uppercase tracking-wider text-slate-500">
@@ -340,6 +401,7 @@ function TemplateSlot({ eventId, certificateType, typeLabel, template }) {
                   placement={placements[field.id]}
                   onDrag={handleDrag}
                   onDragEnd={() => {}}
+                  textStyle={certificateFontStyle}
                 />
               ))}
             </div>
