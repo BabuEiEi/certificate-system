@@ -6,6 +6,7 @@ import ImportManager from "@/components/admin/ImportManager";
 import {
   createParticipantAction,
   deleteParticipantAction,
+  getParticipantDeletionPreviewAction,
   updateParticipantAction,
 } from "@/app/admin/participants/actions";
 import { exportParticipantsToExcel } from "@/lib/excel";
@@ -16,7 +17,7 @@ import {
   participantStatusOptions,
 } from "@/lib/participant";
 import {
-  confirmAppAction,
+  promptAppInput,
   showAppAlert,
   showAppToast,
   useActionAlert,
@@ -170,7 +171,7 @@ function CreateParticipantForm({ eventId }) {
   );
 }
 
-function EditParticipantForm({ eventId, participant }) {
+function EditParticipantForm({ eventId, participant, canPurge }) {
   const [updateState, updateAction, updatePending] = useActionState(
     updateParticipantAction,
     initialActionState,
@@ -180,6 +181,7 @@ function EditParticipantForm({ eventId, participant }) {
     initialActionState,
   );
   const deleteConfirmationGranted = useRef(false);
+  const confirmationNameReference = useRef(null);
   useActionAlert(updateState);
   useActionAlert(deleteState);
 
@@ -191,13 +193,26 @@ function EditParticipantForm({ eventId, participant }) {
 
     event.preventDefault();
     const form = event.currentTarget;
-    const confirmed = await confirmAppAction({
-      title: "ยืนยันการลบผู้รับ",
-      message: `ต้องการลบ “${participant.fullName}” ออกจากกิจกรรมนี้หรือไม่`,
-      confirmButtonText: "ลบผู้รับ",
+    const preview = await getParticipantDeletionPreviewAction(participant.id);
+    if (preview.status !== "success") {
+      await showAppAlert({ status: "error", message: preview.message });
+      return;
+    }
+
+    const certificateCount = preview.counts.certificates.toLocaleString("th-TH");
+    const publishedWarning = preview.counts.published
+      ? ` มีเกียรติบัตรเผยแพร่ ${preview.counts.published.toLocaleString("th-TH")} ฉบับ ซึ่งลิงก์ตรวจสอบจะใช้ไม่ได้ทันที`
+      : "";
+    const { isConfirmed, value } = await promptAppInput({
+      title: "ลบผู้รับและข้อมูลทั้งหมด",
+      message: `ระบบจะลบรายชื่อ เกียรติบัตร/ประวัติ ${certificateCount} ฉบับ และไฟล์ที่เกี่ยวข้องอย่างถาวร${publishedWarning}`,
+      inputLabel: `พิมพ์ “${preview.participantName}” เพื่อยืนยัน`,
+      inputPlaceholder: preview.participantName,
+      confirmButtonText: "ลบถาวร",
     });
 
-    if (confirmed) {
+    if (isConfirmed) {
+      confirmationNameReference.current.value = value;
       deleteConfirmationGranted.current = true;
       form.requestSubmit();
     }
@@ -229,25 +244,32 @@ function EditParticipantForm({ eventId, participant }) {
           </button>
         </div>
       </form>
-      <form
-        action={deleteAction}
-        onSubmit={confirmDelete}
-        className="flex flex-col gap-3 border-t border-slate-200 pt-5 sm:flex-row sm:items-center sm:justify-between"
-      >
-        <input type="hidden" name="participantId" value={participant.id} />
-        <button
-          type="submit"
-          disabled={deletePending}
-          className="self-end rounded-xl border border-rose-200 bg-white px-4 py-2.5 text-sm font-semibold text-rose-600 transition hover:bg-rose-50 disabled:cursor-wait disabled:opacity-60"
+      {canPurge ? (
+        <form
+          action={deleteAction}
+          onSubmit={confirmDelete}
+          className="flex flex-col gap-3 border-t border-slate-200 pt-5 sm:flex-row sm:items-center sm:justify-between"
         >
-          {deletePending ? "กำลังลบ..." : "ลบผู้รับ"}
-        </button>
-      </form>
+          <div>
+            <p className="text-sm font-semibold text-rose-700">พื้นที่อันตราย</p>
+            <p className="mt-1 text-xs text-slate-500">ลบรายชื่อ เกียรติบัตร ประวัติ และไฟล์ของผู้รับรายนี้</p>
+          </div>
+          <input type="hidden" name="participantId" value={participant.id} />
+          <input ref={confirmationNameReference} type="hidden" name="confirmationName" />
+          <button
+            type="submit"
+            disabled={deletePending}
+            className="self-end rounded-xl border border-rose-200 bg-white px-4 py-2.5 text-sm font-semibold text-rose-600 transition hover:bg-rose-50 disabled:cursor-wait disabled:opacity-60"
+          >
+            {deletePending ? "กำลังลบ..." : "ลบผู้รับและข้อมูลทั้งหมด"}
+          </button>
+        </form>
+      ) : null}
     </div>
   );
 }
 
-function ParticipantList({ eventId, participants, searchText }) {
+function ParticipantList({ eventId, participants, searchText, canPurge }) {
   const normalizedSearch = normalizeParticipantText(searchText);
   const filteredParticipants = useMemo(() => {
     if (!normalizedSearch) return participants;
@@ -330,7 +352,11 @@ function ParticipantList({ eventId, participants, searchText }) {
                 </span>
               </div>
             </summary>
-            <EditParticipantForm eventId={eventId} participant={participant} />
+            <EditParticipantForm
+              eventId={eventId}
+              participant={participant}
+              canPurge={canPurge}
+            />
           </details>
         );
       })}
@@ -438,6 +464,7 @@ export default function ParticipantManager({
   participants,
   selectedEventId,
   entryMode,
+  canPurge,
 }) {
   const [searchText, setSearchText] = useState("");
   const selectedEvent = events.find((event) => event.id === selectedEventId);
@@ -528,6 +555,7 @@ export default function ParticipantManager({
           eventId={selectedEventId}
           participants={participants}
           searchText={searchText}
+          canPurge={canPurge}
         />
       </section>
     </div>

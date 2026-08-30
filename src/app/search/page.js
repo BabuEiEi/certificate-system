@@ -1,17 +1,25 @@
 import Link from "next/link";
 import SearchForm from "@/components/public/SearchForm";
 import EmptyState from "@/components/ui/EmptyState";
-import { searchPublishedCertificates } from "@/lib/data/publicCertificates";
+import {
+  getPublicEvents,
+  searchPublishedCertificates,
+} from "@/lib/data/publicCertificates";
 
 export const metadata = {
   title: "ค้นหาเกียรติบัตร",
 };
 
 export default async function SearchPage({ searchParams }) {
-  const { q = "" } = await searchParams;
+  const { event = "", q = "" } = await searchParams;
+  const requestedEventId = Array.isArray(event) ? event[0] : event;
   const query = Array.isArray(q) ? q[0] : q;
+  const events = await getPublicEvents();
+  const selectedEventId = events.some((item) => item.id === requestedEventId)
+    ? requestedEventId
+    : "";
   const hasQuery = Boolean(query.trim());
-  const result = await searchPublishedCertificates(query);
+  const result = await searchPublishedCertificates(selectedEventId, query);
 
   return (
     <main className="min-h-screen bg-slate-50">
@@ -34,7 +42,13 @@ export default async function SearchPage({ searchParams }) {
         </div>
 
         <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
-          <SearchForm defaultValue={query} compact />
+          <SearchForm
+            key={`${selectedEventId}:${query}`}
+            events={events}
+            defaultEventId={selectedEventId}
+            defaultValue={query}
+            compact
+          />
         </div>
 
         <section className="mt-10" aria-labelledby="search-results-heading">
@@ -71,14 +85,18 @@ export default async function SearchPage({ searchParams }) {
           ) : (
             <EmptyState
               title={
-                hasQuery
+                !selectedEventId
+                  ? "กรุณาเลือกกิจกรรมก่อนค้นหา"
+                : hasQuery
                   ? result.status === "success"
                     ? "ไม่พบเกียรติบัตรที่ตรงกับคำค้น"
                     : "ยังไม่สามารถค้นหาข้อมูลได้"
                   : "กรุณาระบุชื่อ–นามสกุล หรือเลขที่เกียรติบัตรเพื่อค้นหา"
               }
               description={
-                hasQuery
+                !selectedEventId
+                  ? "ระบบจะแสดงเฉพาะกิจกรรมที่มีเกียรติบัตรเผยแพร่แล้ว"
+                : hasQuery
                   ? result.message || "ลองตรวจสอบการสะกดหรือใช้เลขที่เกียรติบัตร"
                   : "กรอกข้อมูลในช่องค้นหาด้านบน แล้วกดปุ่มค้นหา"
               }

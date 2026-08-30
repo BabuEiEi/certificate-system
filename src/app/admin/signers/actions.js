@@ -137,6 +137,9 @@ export async function saveSignerAction(_previousState, formData) {
   if (!eventSnapshot.exists) {
     return actionState("error", "ไม่พบกิจกรรมที่ต้องการกำหนดผู้ลงนาม");
   }
+  if (eventSnapshot.data()?.deletion_status) {
+    return actionState("error", "กิจกรรมนี้อยู่ระหว่างการลบ จึงไม่สามารถบันทึกผู้ลงนามได้");
+  }
 
   const signerCount = Number(eventSnapshot.data()?.signer_count ?? 3);
   if (data.order > signerCount) {

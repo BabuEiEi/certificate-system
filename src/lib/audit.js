@@ -7,9 +7,15 @@ export function createAuditLogData({
   actor,
   entityId,
   entityType,
+  eventId = "",
   metadata = {},
 }) {
-  return {
+  const resolvedEventId =
+    eventId
+    || metadata.event_id
+    || metadata.eventId
+    || (entityType === "EVENT" ? entityId : "");
+  const document = {
     action,
     actor_id: actor.id,
     actor_email: actor.email || "",
@@ -18,4 +24,7 @@ export function createAuditLogData({
     metadata,
     created_at: FieldValue.serverTimestamp(),
   };
+
+  if (resolvedEventId) document.event_id = resolvedEventId;
+  return document;
 }

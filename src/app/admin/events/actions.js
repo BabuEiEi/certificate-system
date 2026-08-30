@@ -5,7 +5,16 @@ import { FieldValue } from "firebase-admin/firestore";
 import { z } from "zod";
 import { requireAdmin } from "@/lib/auth";
 import { createAuditLogData } from "@/lib/audit";
-import { getFirebaseAdminDb } from "@/lib/firebase/admin";
+import {
+  EVENT_DELETION_STATUS,
+  matchesDeletionConfirmation,
+} from "@/lib/deletion";
+import { getFirebaseAdminDb, getFirebaseAdminStorage } from "@/lib/firebase/admin";
+import {
+  deleteDocumentReferences,
+  deleteStoragePrefixes,
+  getAuditReferencesForEvent,
+} from "@/lib/firebase/purge";
 
 const eventSchema = z
   .object({
@@ -32,6 +41,10 @@ const eventSchema = z
   });
 
 const eventIdSchema = z.string().trim().min(1).max(128).regex(/^[A-Za-z0-9_-]+$/);
+const deleteEventSchema = z.object({
+  eventId: eventIdSchema,
+  confirmationName: z.string().trim().min(1).max(160),
+});
 
 function parseEventForm(formData) {
   return eventSchema.safeParse({
@@ -99,8 +112,64 @@ function eventDocumentData(data, actor, { creating = false, skipRunningNumber = 
 
 function revalidateEventViews() {
   revalidatePath("/admin/events");
+  revalidatePath("/admin/participants");
+  revalidatePath("/admin/certificates");
+  revalidatePath("/admin/templates");
+  revalidatePath("/admin/signers");
   revalidatePath("/admin/dashboard");
   revalidatePath("/admin/logs");
+  revalidatePath("/");
+  revalidatePath("/search");
+}
+
+function actionState(status, message, extra = {}) {
+  return { status, message, errors: {}, submittedAt: Date.now(), ...extra };
+}
+
+async function countEventDocuments(db, collectionName, eventId) {
+  const snapshot = await db
+    .collection(collectionName)
+    .where("event_id", "==", eventId)
+    .count()
+    .get();
+  return snapshot.data().count;
+}
+
+export async function getEventDeletionPreviewAction(rawEventId) {
+  await requireAdmin();
+  const parsedId = eventIdSchema.safeParse(rawEventId);
+  if (!parsedId.success) return actionState("error", "ไม่พบรหัสกิจกรรมที่ต้องการลบ");
+
+  try {
+    const db = getFirebaseAdminDb();
+    const eventSnapshot = await db.collection("events").doc(parsedId.data).get();
+    if (!eventSnapshot.exists) return actionState("error", "ไม่พบกิจกรรมนี้ในระบบ");
+
+    const [participants, certificates, templates, signers] = await Promise.all([
+      countEventDocuments(db, "participants", parsedId.data),
+      countEventDocuments(db, "certificates", parsedId.data),
+      countEventDocuments(db, "templates", parsedId.data),
+      countEventDocuments(db, "signers", parsedId.data),
+    ]);
+
+    return actionState("success", "", {
+      eventName: eventSnapshot.data()?.name ?? "",
+      counts: { participants, certificates, templates, signers },
+    });
+  } catch {
+    return actionState("error", "ไม่สามารถตรวจสอบข้อมูลที่เกี่ยวข้องได้ กรุณาลองใหม่");
+  }
+}
+
+async function markEventDeletionFailed(eventReference) {
+  await eventReference.set(
+    {
+      deletion_status: "FAILED",
+      deletion_failed_at: FieldValue.serverTimestamp(),
+      updated_at: FieldValue.serverTimestamp(),
+    },
+    { merge: true },
+  ).catch(() => {});
 }
 
 export async function createEventAction(_previousState, formData) {
@@ -176,6 +245,7 @@ export async function updateEventAction(_previousState, formData) {
       const snapshot = await transaction.get(eventReference);
 
       if (!snapshot.exists) throw new Error("EVENT_NOT_FOUND");
+      if (snapshot.data()?.deletion_status) throw new Error("EVENT_DELETION_LOCKED");
 
       transaction.update(eventReference, eventDocumentData(parsed.data, actor, { skipRunningNumber }));
       transaction.set(
@@ -195,6 +265,8 @@ export async function updateEventAction(_previousState, formData) {
       message:
         error instanceof Error && error.message === "EVENT_NOT_FOUND"
           ? "ไม่พบกิจกรรมนี้ในระบบ"
+          : error instanceof Error && error.message === "EVENT_DELETION_LOCKED"
+            ? "กิจกรรมนี้อยู่ระหว่างการลบ จึงไม่สามารถแก้ไขได้"
           : "ไม่สามารถบันทึกกิจกรรมได้ กรุณาลองใหม่",
       errors: {},
       submittedAt: Date.now(),
@@ -209,4 +281,120 @@ export async function updateEventAction(_previousState, formData) {
     errors: {},
     submittedAt: Date.now(),
   };
+}
+
+export async function deleteEventAction(_previousState, formData) {
+  const actor = await requireAdmin();
+  const parsed = deleteEventSchema.safeParse({
+    eventId: formData.get("eventId"),
+    confirmationName: formData.get("confirmationName"),
+  });
+  if (!parsed.success) return actionState("error", "ข้อมูลยืนยันการลบกิจกรรมไม่ถูกต้อง");
+
+  const db = getFirebaseAdminDb();
+  const storage = getFirebaseAdminStorage();
+  const eventReference = db.collection("events").doc(parsed.data.eventId);
+  let eventName = "";
+
+  try {
+    await db.runTransaction(async (transaction) => {
+      const snapshot = await transaction.get(eventReference);
+      if (!snapshot.exists) throw new Error("EVENT_NOT_FOUND");
+
+      eventName = snapshot.data()?.name ?? "";
+      if (!matchesDeletionConfirmation(parsed.data.confirmationName, eventName)) {
+        throw new Error("CONFIRMATION_MISMATCH");
+      }
+
+      transaction.set(
+        eventReference,
+        {
+          deletion_status: EVENT_DELETION_STATUS,
+          deletion_started_at: FieldValue.serverTimestamp(),
+          deletion_started_by: actor.id,
+          updated_at: FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      );
+    });
+
+    const [
+      participantSnapshot,
+      certificateSnapshot,
+      templateSnapshot,
+      signerSnapshot,
+      publishedSnapshot,
+    ] =
+      await Promise.all([
+        db.collection("participants").where("event_id", "==", parsed.data.eventId).get(),
+        db.collection("certificates").where("event_id", "==", parsed.data.eventId).get(),
+        db.collection("templates").where("event_id", "==", parsed.data.eventId).get(),
+        db.collection("signers").where("event_id", "==", parsed.data.eventId).get(),
+        db.collection("publishedCertificates").where("event_id", "==", parsed.data.eventId).get(),
+      ]);
+
+    const relatedDocuments = [
+      ...participantSnapshot.docs,
+      ...certificateSnapshot.docs,
+      ...templateSnapshot.docs,
+      ...signerSnapshot.docs,
+    ];
+    const entityIds = relatedDocuments.map((document) => document.id);
+    const auditReferences = await getAuditReferencesForEvent(db, parsed.data.eventId, entityIds);
+    const publishedReferences = [
+      ...publishedSnapshot.docs.map((document) => document.ref),
+      ...certificateSnapshot.docs.map((document) =>
+        db.collection("publishedCertificates").doc(document.id),
+      ),
+    ];
+
+    await deleteStoragePrefixes(storage, [
+      `certificates/${parsed.data.eventId}/`,
+      `templates/${parsed.data.eventId}/`,
+      `signatures/${parsed.data.eventId}/`,
+    ]);
+
+    await deleteDocumentReferences(db, [
+      ...relatedDocuments.map((document) => document.ref),
+      ...publishedReferences,
+      ...auditReferences,
+    ]);
+
+    const finalBatch = db.batch();
+    finalBatch.delete(eventReference);
+    finalBatch.set(
+      db.collection("auditLogs").doc(),
+      createAuditLogData({
+        action: "EVENT_PURGED",
+        actor,
+        entityId: parsed.data.eventId,
+        entityType: "EVENT",
+        eventId: parsed.data.eventId,
+        metadata: {
+          name: eventName,
+          participantsDeleted: participantSnapshot.size,
+          certificatesDeleted: certificateSnapshot.size,
+          templatesDeleted: templateSnapshot.size,
+          signersDeleted: signerSnapshot.size,
+        },
+      }),
+    );
+    await finalBatch.commit();
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "";
+    if (message !== "EVENT_NOT_FOUND" && message !== "CONFIRMATION_MISMATCH") {
+      await markEventDeletionFailed(eventReference);
+    }
+    return actionState(
+      "error",
+      message === "EVENT_NOT_FOUND"
+        ? "ไม่พบกิจกรรมนี้ในระบบ หรือรายการถูกลบแล้ว"
+        : message === "CONFIRMATION_MISMATCH"
+          ? "ชื่อกิจกรรมที่พิมพ์ไม่ตรงกัน ระบบยังไม่ได้ลบข้อมูล"
+          : "ลบกิจกรรมไม่สำเร็จ ระบบล็อกกิจกรรมไว้เพื่อความปลอดภัย กรุณาลองลบซ้ำ",
+    );
+  }
+
+  revalidateEventViews();
+  return actionState("success", "ลบกิจกรรมและข้อมูลที่เกี่ยวข้องทั้งหมดเรียบร้อยแล้ว");
 }

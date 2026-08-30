@@ -3,10 +3,12 @@
 import { useActionState, useEffect, useRef } from "react";
 import {
   createEventAction,
+  deleteEventAction,
+  getEventDeletionPreviewAction,
   updateEventAction,
 } from "@/app/admin/events/actions";
 import { DEFAULT_CERTIFICATE_SETTINGS } from "@/lib/certificateSettings";
-import { useActionAlert } from "@/lib/sweetAlert";
+import { promptAppInput, showAppAlert, useActionAlert } from "@/lib/sweetAlert";
 import { joinClassNames } from "@/lib/utils";
 
 const initialActionState = {
@@ -265,19 +267,95 @@ function EditEventForm({ event }) {
   useActionAlert(state);
 
   return (
-    <form action={formAction} noValidate className="space-y-5 border-t border-slate-100 bg-slate-50/70 p-5 sm:p-6">
-      <input type="hidden" name="eventId" value={event.id} />
-      <EventFormFields event={event} />
-      <FormErrors errors={state.errors} />
-      <div className="flex justify-end">
-        <button
-          type="submit"
-          disabled={pending}
-          className="rounded-xl bg-brand px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-dark disabled:cursor-wait disabled:opacity-60"
-        >
-          {pending ? "กำลังบันทึก..." : "บันทึกการแก้ไข"}
-        </button>
+    <div className="space-y-5 border-t border-slate-100 bg-slate-50/70 p-5 sm:p-6">
+      {!event.deletionStatus ? (
+        <form action={formAction} noValidate className="space-y-5">
+          <input type="hidden" name="eventId" value={event.id} />
+          <EventFormFields event={event} />
+          <FormErrors errors={state.errors} />
+          <div className="flex justify-end">
+            <button
+              type="submit"
+              disabled={pending}
+              className="rounded-xl bg-brand px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-dark disabled:cursor-wait disabled:opacity-60"
+            >
+              {pending ? "กำลังบันทึก..." : "บันทึกการแก้ไข"}
+            </button>
+          </div>
+        </form>
+      ) : (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          การลบครั้งก่อนยังไม่สมบูรณ์ ระบบล็อกกิจกรรมไว้เพื่อป้องกันข้อมูลใหม่ กรุณากดลบซ้ำ
+        </div>
+      )}
+      <EventDeletionForm event={event} />
+    </div>
+  );
+}
+
+function EventDeletionForm({ event }) {
+  const [state, formAction, pending] = useActionState(deleteEventAction, initialActionState);
+  const confirmationGranted = useRef(false);
+  const confirmationNameReference = useRef(null);
+  useActionAlert(state);
+
+  async function confirmDeletion(submitEvent) {
+    if (confirmationGranted.current) {
+      confirmationGranted.current = false;
+      return;
+    }
+
+    submitEvent.preventDefault();
+    const form = submitEvent.currentTarget;
+    const preview = await getEventDeletionPreviewAction(event.id);
+    if (preview.status !== "success") {
+      await showAppAlert({ status: "error", message: preview.message });
+      return;
+    }
+
+    const counts = preview.counts;
+    const summary = [
+      `รายชื่อ ${counts.participants.toLocaleString("th-TH")} รายการ`,
+      `เกียรติบัตร/ประวัติ ${counts.certificates.toLocaleString("th-TH")} ฉบับ`,
+      `แม่แบบ ${counts.templates.toLocaleString("th-TH")} รายการ`,
+      `ผู้ลงนาม ${counts.signers.toLocaleString("th-TH")} รายการ`,
+    ].join(" · ");
+    const { isConfirmed, value } = await promptAppInput({
+      title: "ลบกิจกรรมและข้อมูลทั้งหมด",
+      message: `${summary}\nลิงก์ตรวจสอบเกียรติบัตรทั้งหมดของกิจกรรมนี้จะใช้ไม่ได้ทันทีและไม่สามารถกู้คืนได้`,
+      inputLabel: `พิมพ์ “${preview.eventName}” เพื่อยืนยัน`,
+      inputPlaceholder: preview.eventName,
+      confirmButtonText: "ลบกิจกรรมถาวร",
+    });
+
+    if (isConfirmed) {
+      confirmationNameReference.current.value = value;
+      confirmationGranted.current = true;
+      form.requestSubmit();
+    }
+  }
+
+  return (
+    <form
+      action={formAction}
+      onSubmit={confirmDeletion}
+      className="flex flex-col gap-3 border-t border-rose-200 pt-5 sm:flex-row sm:items-center sm:justify-between"
+    >
+      <div>
+        <p className="text-sm font-semibold text-rose-700">พื้นที่อันตราย</p>
+        <p className="mt-1 text-xs leading-5 text-slate-500">
+          หากต้องการหยุดใช้งานโดยยังคงลิงก์ตรวจสอบ ให้เลือกสถานะ “ปิดกิจกรรม” แทน
+        </p>
       </div>
+      <input type="hidden" name="eventId" value={event.id} />
+      <input ref={confirmationNameReference} type="hidden" name="confirmationName" />
+      <button
+        type="submit"
+        disabled={pending}
+        className="self-end rounded-xl border border-rose-300 bg-white px-4 py-2.5 text-sm font-semibold text-rose-700 transition hover:bg-rose-50 disabled:cursor-wait disabled:opacity-60"
+      >
+        {pending ? "กำลังลบข้อมูลทั้งหมด..." : "ลบกิจกรรมและข้อมูลทั้งหมด"}
+      </button>
     </form>
   );
 }
@@ -314,6 +392,11 @@ function EventList({ events }) {
                     <span className={joinClassNames("rounded-full px-2.5 py-1 text-xs font-semibold", statusStyles[event.status])}>
                       {status?.label ?? event.status}
                     </span>
+                    {event.deletionStatus ? (
+                      <span className="rounded-full bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-700">
+                        รอลบซ้ำ
+                      </span>
+                    ) : null}
                     <span className="text-xs text-slate-400">{formatDate(event.startDate)} – {formatDate(event.endDate)}</span>
                   </div>
                   <h2 className="mt-3 truncate text-lg font-bold text-slate-900">{event.name}</h2>

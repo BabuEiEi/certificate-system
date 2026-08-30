@@ -19,6 +19,26 @@ export function isFirebaseAdminConfigured() {
   );
 }
 
+export function isFirebaseAdminRuntimeAvailable() {
+  if (!isFirebaseAdminConfigured()) return false;
+
+  const hasServiceAccount = Boolean(
+    process.env.FIREBASE_ADMIN_CLIENT_EMAIL && process.env.FIREBASE_ADMIN_PRIVATE_KEY,
+  );
+  const hasApplicationDefaultCredentials = Boolean(
+    process.env.GOOGLE_APPLICATION_CREDENTIALS
+      || process.env.K_SERVICE
+      || process.env.FUNCTION_TARGET
+      || process.env.FIREBASE_CONFIG,
+  );
+
+  return Boolean(
+    process.env.FIRESTORE_EMULATOR_HOST
+      || hasServiceAccount
+      || hasApplicationDefaultCredentials,
+  );
+}
+
 export function getFirebaseConfig() {
   if (!isFirebaseConfigured()) {
     throw new Error(

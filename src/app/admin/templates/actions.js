@@ -161,6 +161,9 @@ export async function saveTemplateAction(_previousState, formData) {
   if (!eventSnapshot.exists) {
     return actionState("error", "ไม่พบกิจกรรมที่ต้องการกำหนดแม่แบบ");
   }
+  if (eventSnapshot.data()?.deletion_status) {
+    return actionState("error", "กิจกรรมนี้อยู่ระหว่างการลบ จึงไม่สามารถบันทึกแม่แบบได้");
+  }
 
   const previousData = templateSnapshot.data() ?? {};
   if (!templateFile.file && !previousData.file_path) {

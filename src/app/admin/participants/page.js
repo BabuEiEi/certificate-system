@@ -1,11 +1,12 @@
 import ParticipantManager from "@/components/admin/ParticipantManager";
 import { getEvents } from "@/lib/data/events";
 import { getParticipants } from "@/lib/data/participants";
+import { requireStaff } from "@/lib/auth";
 
 export const metadata = { title: "ผู้รับเกียรติบัตร" };
 
 export default async function ParticipantsPage({ searchParams }) {
-  const events = await getEvents();
+  const [actor, events] = await Promise.all([requireStaff(), getEvents()]);
   const query = await searchParams;
   const requestedEventId = query.event;
   const selectedEventId = events.some((event) => event.id === requestedEventId)
@@ -28,6 +29,7 @@ export default async function ParticipantsPage({ searchParams }) {
         participants={participants}
         selectedEventId={selectedEventId}
         entryMode={entryMode}
+        canPurge={actor.role === "ADMIN"}
       />
     </section>
   );

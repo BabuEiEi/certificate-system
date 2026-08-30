@@ -21,6 +21,7 @@ function serializeEvent(snapshot) {
     startDate: data.start_date ?? "",
     endDate: data.end_date ?? "",
     status: data.status ?? "DRAFT",
+    deletionStatus: data.deletion_status ?? "",
     signerCount: Number(data.signer_count ?? 3),
     // Falls back to the same defaults as the old global certificateSettings
     // doc so an event that hasn't customized its numbering yet still shows

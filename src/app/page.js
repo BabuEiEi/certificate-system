@@ -1,7 +1,11 @@
 import Link from "next/link";
 import SearchForm from "@/components/public/SearchForm";
+import { getPublicEvents } from "@/lib/data/publicCertificates";
 
-export default function HomePage() {
+export const dynamic = "force-dynamic";
+
+export default async function HomePage() {
+  const events = await getPublicEvents();
   return (
     <main className="relative flex min-h-screen overflow-hidden bg-slate-50">
       <div className="absolute inset-x-0 top-0 h-1.5 bg-gradient-to-r from-brand-dark via-brand to-gold" />
@@ -43,7 +47,7 @@ export default function HomePage() {
             </p>
 
             <div className="mt-10 rounded-3xl border border-white/80 bg-white/90 p-4 text-left shadow-2xl shadow-slate-900/10 backdrop-blur sm:p-6">
-              <SearchForm />
+              <SearchForm events={events} />
               <p className="mt-4 text-center text-xs text-slate-400">
                 ระบบแสดงเฉพาะเกียรติบัตรที่เผยแพร่ในทะเบียนสาธารณะ
               </p>

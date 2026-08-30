@@ -41,6 +41,8 @@ function revalidateCertificateViews() {
   revalidatePath("/admin/certificates");
   revalidatePath("/admin/dashboard");
   revalidatePath("/admin/logs");
+  revalidatePath("/");
+  revalidatePath("/search");
 }
 
 function formatIssuedDate(date) {
@@ -164,6 +166,9 @@ export async function issueCertificatesAction(_previousState, formData) {
     return actionState("error", "ไม่พบกิจกรรมที่ต้องการออกเกียรติบัตร");
   }
   const event = eventSnapshot.data();
+  if (event.deletion_status) {
+    return actionState("error", "กิจกรรมนี้อยู่ระหว่างการลบ จึงไม่สามารถออกเกียรติบัตรได้");
+  }
 
   const participantSnapshots = await Promise.all(
     participantIds.map((participantId) => db.collection("participants").doc(participantId).get()),
@@ -320,6 +325,9 @@ async function issueSingleCertificate({ db, storage, actor, event, participant, 
     (await db.runTransaction(async (transaction) => {
       const eventSnapshot = await transaction.get(eventReference);
       const eventData = eventSnapshot.data() ?? {};
+      if (!eventSnapshot.exists || eventData.deletion_status) {
+        throw new Error("EVENT_DELETION_LOCKED");
+      }
       const hasOwnNumbering = eventData.next_number !== undefined;
 
       let settings = eventData;
@@ -418,6 +426,7 @@ async function issueSingleCertificate({ db, storage, actor, event, participant, 
 
   batch.set(publishedReference, {
     certificate_id: certificateReference.id,
+    event_id: event.id,
     verification_token: verificationToken,
     certificate_number: certificateNumber,
     recipient_name: participant.full_name,
@@ -500,6 +509,9 @@ export async function repairCertificateFileAction(_previousState, formData) {
 
     if (!eventSnapshot.exists || !templateSnapshot.exists) {
       return actionState("error", "ไม่พบกิจกรรมหรือแม่แบบที่ใช้สร้างเกียรติบัตรนี้");
+    }
+    if (eventSnapshot.data()?.deletion_status) {
+      return actionState("error", "กิจกรรมนี้อยู่ระหว่างการลบ จึงไม่สามารถซ่อมไฟล์ได้");
     }
 
     const issuedDate = firestoreTimestampToDate(certificateData.issued_at);
@@ -667,7 +679,11 @@ export async function revokeCertificateAction(_previousState, formData) {
           actor,
           entityId: certificateId,
           entityType: "CERTIFICATE",
-          metadata: { reason },
+          metadata: {
+            reason,
+            event_id: data.event_id,
+            participant_id: data.participant_id,
+          },
         }),
       );
     });

@@ -3,9 +3,15 @@
 import { revalidatePath } from "next/cache";
 import { FieldValue } from "firebase-admin/firestore";
 import { z } from "zod";
-import { requireStaff } from "@/lib/auth";
+import { requireAdmin, requireStaff } from "@/lib/auth";
 import { createAuditLogData } from "@/lib/audit";
-import { getFirebaseAdminDb } from "@/lib/firebase/admin";
+import { matchesDeletionConfirmation } from "@/lib/deletion";
+import { getFirebaseAdminDb, getFirebaseAdminStorage } from "@/lib/firebase/admin";
+import {
+  deleteDocumentReferences,
+  deleteStoragePaths,
+  getAuditReferencesForParticipant,
+} from "@/lib/firebase/purge";
 import {
   buildParticipantNameKey,
   buildParticipantStrongDedupeKey,
@@ -91,6 +97,40 @@ function revalidateParticipantViews() {
   revalidatePath("/admin/import");
   revalidatePath("/admin/dashboard");
   revalidatePath("/admin/logs");
+  revalidatePath("/admin/certificates");
+  revalidatePath("/");
+  revalidatePath("/search");
+}
+
+function actionState(status, message, extra = {}) {
+  return { status, message, errors: {}, submittedAt: Date.now(), ...extra };
+}
+
+export async function getParticipantDeletionPreviewAction(rawParticipantId) {
+  await requireAdmin();
+  const parsedId = documentIdSchema.safeParse(rawParticipantId);
+  if (!parsedId.success) return actionState("error", "ไม่พบรหัสผู้รับ");
+
+  try {
+    const db = getFirebaseAdminDb();
+    const participantSnapshot = await db.collection("participants").doc(parsedId.data).get();
+    if (!participantSnapshot.exists) return actionState("error", "ไม่พบผู้รับรายนี้ในระบบ");
+
+    const certificateSnapshot = await db
+      .collection("certificates")
+      .where("participant_id", "==", parsedId.data)
+      .get();
+    const published = certificateSnapshot.docs.filter(
+      (document) => document.data()?.status === "PUBLISHED",
+    ).length;
+
+    return actionState("success", "", {
+      participantName: participantSnapshot.data()?.full_name ?? "",
+      counts: { certificates: certificateSnapshot.size, published },
+    });
+  } catch {
+    return actionState("error", "ไม่สามารถตรวจสอบข้อมูลผู้รับได้ กรุณาลองใหม่");
+  }
 }
 
 function hasStrongDuplicate(snapshot, data, excludedDocumentId = "") {
@@ -156,6 +196,7 @@ export async function createParticipantAction(_previousState, formData) {
       ]);
 
       if (!eventSnapshot.exists) throw new Error("EVENT_NOT_FOUND");
+      if (eventSnapshot.data()?.deletion_status) throw new Error("EVENT_DELETION_LOCKED");
 
       if (hasStrongDuplicate(participantsSnapshot, parsed.data)) {
         throw new Error("PARTICIPANT_DUPLICATE");
@@ -196,6 +237,8 @@ export async function createParticipantAction(_previousState, formData) {
       message:
         message === "EVENT_NOT_FOUND"
           ? "ไม่พบกิจกรรมที่เลือก"
+          : message === "EVENT_DELETION_LOCKED"
+            ? "กิจกรรมนี้อยู่ระหว่างการลบ จึงไม่สามารถเพิ่มผู้รับได้"
           : message === "PARTICIPANT_DUPLICATE"
             ? "รหัสผู้รับหรืออีเมลนี้มีอยู่ในกิจกรรมแล้ว"
             : "ไม่สามารถเพิ่มผู้รับได้ กรุณาลองใหม่",
@@ -246,6 +289,7 @@ export async function updateParticipantAction(_previousState, formData) {
       ]);
 
       if (!eventSnapshot.exists) throw new Error("EVENT_NOT_FOUND");
+      if (eventSnapshot.data()?.deletion_status) throw new Error("EVENT_DELETION_LOCKED");
       if (!participantSnapshot.exists) throw new Error("PARTICIPANT_NOT_FOUND");
 
       if (hasStrongDuplicate(participantsSnapshot, parsed.data, participantReference.id)) {
@@ -287,6 +331,8 @@ export async function updateParticipantAction(_previousState, formData) {
       message:
         message === "PARTICIPANT_DUPLICATE"
           ? "รหัสผู้รับหรืออีเมลนี้ซ้ำกับผู้รับรายอื่นในกิจกรรม"
+          : message === "EVENT_DELETION_LOCKED"
+            ? "กิจกรรมนี้อยู่ระหว่างการลบ จึงไม่สามารถแก้ไขผู้รับได้"
           : message === "EVENT_NOT_FOUND"
             ? "ไม่พบกิจกรรมที่เลือก"
             : message === "PARTICIPANT_NOT_FOUND"
@@ -307,7 +353,7 @@ export async function updateParticipantAction(_previousState, formData) {
 }
 
 export async function deleteParticipantAction(_previousState, formData) {
-  const actor = await requireStaff();
+  const actor = await requireAdmin();
   const parsedId = documentIdSchema.safeParse(formData.get("participantId"));
 
   if (!parsedId.success) {
@@ -316,41 +362,65 @@ export async function deleteParticipantAction(_previousState, formData) {
 
   try {
     const db = getFirebaseAdminDb();
+    const storage = getFirebaseAdminStorage();
     const participantReference = db.collection("participants").doc(parsedId.data);
-    const certificateQuery = db
+    const participantSnapshot = await participantReference.get();
+    if (!participantSnapshot.exists) throw new Error("PARTICIPANT_NOT_FOUND");
+
+    const participantData = participantSnapshot.data();
+    if (!matchesDeletionConfirmation(formData.get("confirmationName"), participantData.full_name)) {
+      throw new Error("CONFIRMATION_MISMATCH");
+    }
+
+    const eventSnapshot = await db.collection("events").doc(participantData.event_id).get();
+    if (!eventSnapshot.exists) throw new Error("EVENT_NOT_FOUND");
+    if (eventSnapshot.data()?.deletion_status) throw new Error("EVENT_DELETION_LOCKED");
+
+    const certificateSnapshot = await db
       .collection("certificates")
       .where("participant_id", "==", parsedId.data)
-      .limit(1);
-    const auditReference = db.collection("auditLogs").doc();
-
-    await db.runTransaction(async (transaction) => {
-      const [snapshot, certificateSnapshot] = await Promise.all([
-        transaction.get(participantReference),
-        transaction.get(certificateQuery),
-      ]);
-      if (!snapshot.exists) throw new Error("PARTICIPANT_NOT_FOUND");
-      if (!certificateSnapshot.empty) throw new Error("PARTICIPANT_HAS_CERTIFICATE");
-
-      const data = snapshot.data();
-      transaction.delete(participantReference);
-      transaction.set(
-        auditReference,
-        createAuditLogData({
-          action: "PARTICIPANT_DELETED",
-          actor,
-          entityId: participantReference.id,
-          entityType: "PARTICIPANT",
-          metadata: { name: data.full_name ?? "", eventId: data.event_id ?? "" },
-        }),
-      );
+      .get();
+    const certificateIds = certificateSnapshot.docs.map((document) => document.id);
+    const auditReferences = await getAuditReferencesForParticipant(
+      db,
+      parsedId.data,
+      certificateIds,
+    );
+    const storagePaths = certificateSnapshot.docs.flatMap((document) => {
+      const data = document.data();
+      return [data.png_path, data.pdf_path].filter(Boolean);
     });
+
+    await deleteStoragePaths(storage, storagePaths);
+    await deleteDocumentReferences(db, [
+      ...certificateSnapshot.docs.map((document) => document.ref),
+      ...certificateIds.map((id) => db.collection("publishedCertificates").doc(id)),
+      ...auditReferences,
+      participantReference,
+    ]);
+
+    await db.collection("auditLogs").add(
+      createAuditLogData({
+        action: "PARTICIPANT_PURGED",
+        actor,
+        entityId: parsedId.data,
+        entityType: "PARTICIPANT",
+        eventId: participantData.event_id,
+        metadata: { certificatesDeleted: certificateSnapshot.size },
+      }),
+    );
   } catch (error) {
+    const message = error instanceof Error ? error.message : "";
     return {
       status: "error",
       message:
-        error instanceof Error && error.message === "PARTICIPANT_HAS_CERTIFICATE"
-          ? "ไม่สามารถลบได้ เนื่องจากผู้รับรายนี้มีเกียรติบัตรอ้างอิงอยู่"
-          : "ไม่สามารถลบผู้รับได้ หรือรายการนี้ไม่มีอยู่แล้ว",
+        message === "CONFIRMATION_MISMATCH"
+          ? "ชื่อผู้รับที่พิมพ์ไม่ตรงกัน ระบบยังไม่ได้ลบข้อมูล"
+          : message === "EVENT_DELETION_LOCKED"
+            ? "กิจกรรมนี้อยู่ระหว่างการลบ จึงไม่สามารถลบผู้รับแยกได้"
+            : message === "PARTICIPANT_NOT_FOUND"
+              ? "ไม่พบผู้รับรายนี้ในระบบ หรือรายการถูกลบแล้ว"
+              : "ไม่สามารถลบผู้รับและข้อมูลที่เกี่ยวข้องได้ กรุณาลองใหม่",
       errors: {},
       submittedAt: Date.now(),
     };
@@ -359,7 +429,7 @@ export async function deleteParticipantAction(_previousState, formData) {
   revalidateParticipantViews();
   return {
     status: "success",
-    message: "ลบผู้รับออกจากกิจกรรมแล้ว",
+    message: "ลบผู้รับ เกียรติบัตร และประวัติที่เกี่ยวข้องทั้งหมดแล้ว",
     errors: {},
     submittedAt: Date.now(),
   };
@@ -421,6 +491,7 @@ export async function importParticipantsAction(_previousState, formData) {
       ]);
 
       if (!eventSnapshot.exists) throw new Error("EVENT_NOT_FOUND");
+      if (eventSnapshot.data()?.deletion_status) throw new Error("EVENT_DELETION_LOCKED");
 
       const existingStrongKeys = new Set(
         participantsSnapshot.docs.flatMap((document) => {
@@ -548,6 +619,8 @@ export async function importParticipantsAction(_previousState, formData) {
       message:
         error instanceof Error && error.message === "EVENT_NOT_FOUND"
           ? "ไม่พบกิจกรรมที่เลือก"
+          : error instanceof Error && error.message === "EVENT_DELETION_LOCKED"
+            ? "กิจกรรมนี้อยู่ระหว่างการลบ จึงไม่สามารถนำเข้ารายชื่อได้"
           : "ไม่สามารถนำเข้ารายชื่อได้ กรุณาลองใหม่",
       importedCount: 0,
       skippedCount: 0,
