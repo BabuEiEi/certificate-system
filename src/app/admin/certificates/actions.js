@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { FieldValue } from "firebase-admin/firestore";
 import { z } from "zod";
-import { requireStaff } from "@/lib/auth";
+import { requireAdmin, requireStaff } from "@/lib/auth";
 import { createAuditLogData } from "@/lib/audit";
 import { getFirebaseAdminDb, getFirebaseAdminStorage } from "@/lib/firebase/admin";
 import { createSearchTerms } from "@/lib/firebase/search";
@@ -31,6 +31,7 @@ const revokeSchema = z.object({
   reason: z.string().trim().max(500).optional().default(""),
 });
 const repairSchema = z.object({ certificateId: documentIdSchema });
+const deleteSchema = z.object({ certificateId: documentIdSchema });
 
 function actionState(status, message, errors = {}) {
   return { status, message, errors, submittedAt: Date.now() };
@@ -684,4 +685,67 @@ export async function revokeCertificateAction(_previousState, formData) {
   revalidateCertificateViews();
 
   return actionState("success", "ยกเลิกเกียรติบัตรเรียบร้อยแล้ว");
+}
+
+// ADMIN-only, and only for a certificate that isn't the live PUBLISHED one --
+// this permanently removes a stale duplicate left behind by a
+// revoke-then-reissue cycle (see issueCertificatesAction), not the audit
+// trail of the certificate currently in effect.
+export async function deleteCertificateAction(_previousState, formData) {
+  const actor = await requireAdmin();
+  const parsed = deleteSchema.safeParse({ certificateId: formData.get("certificateId") });
+
+  if (!parsed.success) {
+    return actionState("error", "ข้อมูลเกียรติบัตรที่ต้องการลบไม่ถูกต้อง");
+  }
+
+  const { certificateId } = parsed.data;
+  const db = getFirebaseAdminDb();
+  const certificateReference = db.collection("certificates").doc(certificateId);
+  const publishedReference = db.collection("publishedCertificates").doc(certificateId);
+
+  try {
+    const certificateSnapshot = await certificateReference.get();
+    if (!certificateSnapshot.exists) {
+      return actionState("error", "ไม่พบเกียรติบัตรที่ต้องการลบ");
+    }
+
+    const data = certificateSnapshot.data();
+    if (data.status === "PUBLISHED") {
+      return actionState("error", "ลบไม่ได้เนื่องจากเป็นเกียรติบัตรที่กำลังเผยแพร่อยู่ กรุณายกเลิกก่อน");
+    }
+
+    const filePathsToDelete = [data.png_path, data.pdf_path].filter(Boolean);
+    if (filePathsToDelete.length) {
+      const bucket = getFirebaseAdminStorage().bucket();
+      await Promise.all(
+        filePathsToDelete.map((path) => bucket.file(path).delete({ ignoreNotFound: true }).catch(() => {})),
+      );
+    }
+
+    const batch = db.batch();
+    batch.delete(certificateReference);
+    batch.delete(publishedReference);
+    batch.set(
+      db.collection("auditLogs").doc(),
+      createAuditLogData({
+        action: "CERTIFICATE_DELETED",
+        actor,
+        entityId: certificateId,
+        entityType: "CERTIFICATE",
+        metadata: {
+          event_id: data.event_id,
+          participant_id: data.participant_id,
+          certificate_number: data.certificate_number,
+        },
+      }),
+    );
+    await batch.commit();
+  } catch (error) {
+    console.error("Certificate deletion failed", { certificateId, error });
+    return actionState("error", "ไม่สามารถลบเกียรติบัตรได้ กรุณาลองใหม่");
+  }
+
+  revalidateCertificateViews();
+  return actionState("success", "ลบเกียรติบัตรเรียบร้อยแล้ว");
 }

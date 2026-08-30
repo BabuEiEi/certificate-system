@@ -9,6 +9,10 @@
           "arrayConfig": "CONTAINS"
         },
         {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
           "fieldPath": "issued_at",
           "order": "DESCENDING"
         }

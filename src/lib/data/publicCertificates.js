@@ -53,9 +53,15 @@ export async function searchPublishedCertificates(rawQuery) {
   }
 
   try {
+    // A participant can end up with several publishedCertificates docs over
+    // time (a revoked one is kept for audit history, not deleted -- see
+    // revokeCertificateAction/issueCertificatesAction). Only ever one of
+    // those can be PUBLISHED at a time, so filtering to that status is
+    // enough to show a single, current result per participant.
     const snapshot = await getFirebaseAdminDb()
       .collection("publishedCertificates")
       .where("search_terms", "array-contains", normalizeSearchTerm(parsed.data))
+      .where("status", "==", "PUBLISHED")
       .orderBy("issued_at", "desc")
       .limit(20)
       .get();

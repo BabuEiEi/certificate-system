@@ -66,8 +66,12 @@ function isMoreRelevantCertificate(candidate, current) {
   return (candidate.createdAt ?? "") > (current.createdAt ?? "");
 }
 
+// Returns both the one certificate the admin list should show per
+// participant (`current`) and any other doc(s) left behind by a
+// revoke-then-reissue cycle (`history`) so they can be surfaced for cleanup
+// deletion instead of staying invisible forever.
 export async function getCertificatesByParticipantId(participantIds) {
-  if (!participantIds.length) return {};
+  if (!participantIds.length) return { current: {}, history: {} };
 
   const db = getFirebaseAdminDb();
   const chunks = [];
@@ -81,15 +85,26 @@ export async function getCertificatesByParticipantId(participantIds) {
     ),
   );
 
-  const byParticipantId = {};
+  const allByParticipantId = {};
   snapshots.forEach((snapshot) => {
     snapshot.docs.forEach((doc) => {
       const certificate = serializeCertificate(doc);
-      if (isMoreRelevantCertificate(certificate, byParticipantId[certificate.participantId])) {
-        byParticipantId[certificate.participantId] = certificate;
-      }
+      (allByParticipantId[certificate.participantId] ??= []).push(certificate);
     });
   });
 
-  return byParticipantId;
+  const current = {};
+  const history = {};
+  Object.entries(allByParticipantId).forEach(([participantId, certificates]) => {
+    let relevant = null;
+    certificates.forEach((certificate) => {
+      if (isMoreRelevantCertificate(certificate, relevant)) relevant = certificate;
+    });
+    current[participantId] = relevant;
+    history[participantId] = certificates
+      .filter((certificate) => certificate.id !== relevant.id)
+      .sort((left, right) => (right.createdAt ?? "").localeCompare(left.createdAt ?? ""));
+  });
+
+  return { current, history };
 }

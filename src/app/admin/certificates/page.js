@@ -13,9 +13,8 @@ export default async function CertificatesPage({ searchParams }) {
     : events[0]?.id ?? "";
 
   const participants = await getParticipants(selectedEventId);
-  const certificatesByParticipantId = await getCertificatesByParticipantId(
-    participants.map((participant) => participant.id),
-  );
+  const { current: certificatesByParticipantId, history: certificateHistoryByParticipantId } =
+    await getCertificatesByParticipantId(participants.map((participant) => participant.id));
 
   return (
     <section>
@@ -32,6 +31,7 @@ export default async function CertificatesPage({ searchParams }) {
         selectedEventId={selectedEventId}
         participants={participants}
         certificatesByParticipantId={certificatesByParticipantId}
+        certificateHistoryByParticipantId={certificateHistoryByParticipantId}
       />
     </section>
   );

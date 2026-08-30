@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { useActionState } from "react";
 import {
+  deleteCertificateAction,
   issueCertificatesAction,
   repairCertificateFileAction,
   revokeCertificateAction,
@@ -132,13 +133,83 @@ function RepairControl({ certificateId }) {
   );
 }
 
+function DeleteControl({ certificateId }) {
+  const [state, formAction, pending] = useActionState(deleteCertificateAction, initialActionState);
+  useActionAlert(state);
+
+  async function handleSubmit(event) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const confirmed = await confirmAppAction({
+      title: "ลบเกียรติบัตรถาวร",
+      message: "เกียรติบัตรฉบับนี้และไฟล์ที่เกี่ยวข้องจะถูกลบออกจากระบบอย่างถาวร ไม่สามารถกู้คืนได้",
+      confirmButtonText: "ลบถาวร",
+    });
+    if (!confirmed) return;
+
+    formAction(new FormData(form));
+  }
+
+  return (
+    <form onSubmit={handleSubmit}>
+      <input type="hidden" name="certificateId" value={certificateId} />
+      <button
+        type="submit"
+        disabled={pending}
+        className="rounded-lg border border-rose-300 bg-rose-50 px-3 py-1.5 text-xs font-semibold text-rose-700 transition hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        {pending ? "กำลังลบ…" : "ลบถาวร"}
+      </button>
+    </form>
+  );
+}
+
+function CertificateHistory({ certificates }) {
+  const [open, setOpen] = useState(false);
+
+  if (!certificates.length) return null;
+
+  return (
+    <div className="mt-2">
+      <button
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        className="text-xs font-semibold text-slate-400 underline decoration-dotted hover:text-slate-600"
+      >
+        {open ? "ซ่อน" : "แสดง"}ฉบับซ้ำที่ถูกยกเลิก ({certificates.length})
+      </button>
+      {open ? (
+        <ul className="mt-2 space-y-2">
+          {certificates.map((certificate) => (
+            <li
+              key={certificate.id}
+              className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 text-xs text-slate-500"
+            >
+              <span>
+                {certificate.certificateNumber || "—"} · {statusBadge(certificate.status)}
+              </span>
+              <DeleteControl certificateId={certificate.id} />
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </div>
+  );
+}
+
 // A revoked certificate doesn't block reissuing (see issueCertificatesAction)
 // -- only a still-live PUBLISHED one does.
 function canIssue(certificate) {
   return !certificate || certificate.status !== "PUBLISHED";
 }
 
-export default function CertificateManager({ events, selectedEventId, participants, certificatesByParticipantId }) {
+export default function CertificateManager({
+  events,
+  selectedEventId,
+  participants,
+  certificatesByParticipantId,
+  certificateHistoryByParticipantId = {},
+}) {
   const [selectedIds, setSelectedIds] = useState([]);
 
   const eligibleParticipants = useMemo(
@@ -230,7 +301,12 @@ export default function CertificateManager({ events, selectedEventId, participan
                   <td className="px-4 py-3 text-slate-500">
                     {getCertificateTypeLabel(participant.certificateType)}
                   </td>
-                  <td className="px-4 py-3">{statusBadge(certificate?.status)}</td>
+                  <td className="px-4 py-3">
+                    {statusBadge(certificate?.status)}
+                    <CertificateHistory
+                      certificates={certificateHistoryByParticipantId[participant.id] ?? []}
+                    />
+                  </td>
                   <td className="px-4 py-3 text-slate-500">{certificate?.certificateNumber || "—"}</td>
                   <td className="px-4 py-3">
                     <div className="flex justify-end gap-2">
