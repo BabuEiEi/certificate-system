@@ -295,6 +295,7 @@ export async function deleteEventAction(_previousState, formData) {
   const storage = getFirebaseAdminStorage();
   const eventReference = db.collection("events").doc(parsed.data.eventId);
   let eventName = "";
+  let deletionPhase = "LOCK_EVENT";
 
   try {
     await db.runTransaction(async (transaction) => {
@@ -318,6 +319,7 @@ export async function deleteEventAction(_previousState, formData) {
       );
     });
 
+    deletionPhase = "LOAD_RELATED_DATA";
     const [
       participantSnapshot,
       certificateSnapshot,
@@ -333,6 +335,7 @@ export async function deleteEventAction(_previousState, formData) {
         db.collection("publishedCertificates").where("event_id", "==", parsed.data.eventId).get(),
       ]);
 
+    deletionPhase = "LOAD_AUDIT_LOGS";
     const relatedDocuments = [
       ...participantSnapshot.docs,
       ...certificateSnapshot.docs,
@@ -348,18 +351,21 @@ export async function deleteEventAction(_previousState, formData) {
       ),
     ];
 
+    deletionPhase = "DELETE_STORAGE_FILES";
     await deleteStoragePrefixes(storage, [
       `certificates/${parsed.data.eventId}/`,
       `templates/${parsed.data.eventId}/`,
       `signatures/${parsed.data.eventId}/`,
     ]);
 
+    deletionPhase = "DELETE_RELATED_DOCUMENTS";
     await deleteDocumentReferences(db, [
       ...relatedDocuments.map((document) => document.ref),
       ...publishedReferences,
       ...auditReferences,
     ]);
 
+    deletionPhase = "FINALIZE_EVENT_DELETION";
     const finalBatch = db.batch();
     finalBatch.delete(eventReference);
     finalBatch.set(
@@ -382,16 +388,30 @@ export async function deleteEventAction(_previousState, formData) {
     await finalBatch.commit();
   } catch (error) {
     const message = error instanceof Error ? error.message : "";
+    console.error("Event deletion failed", {
+      eventId: parsed.data.eventId,
+      phase: deletionPhase,
+      code: error?.code,
+      error,
+    });
     if (message !== "EVENT_NOT_FOUND" && message !== "CONFIRMATION_MISMATCH") {
       await markEventDeletionFailed(eventReference);
     }
+    const phaseMessage =
+      deletionPhase === "DELETE_STORAGE_FILES"
+        ? "ไม่สามารถลบไฟล์ของกิจกรรมจาก Storage ได้ กรุณาตรวจสิทธิ์ของ Firebase Storage แล้วลองซ้ำ"
+        : deletionPhase === "LOAD_RELATED_DATA" || deletionPhase === "LOAD_AUDIT_LOGS"
+          ? "ไม่สามารถอ่านข้อมูลที่เกี่ยวข้องจาก Firestore ได้ กรุณาตรวจดัชนีและสิทธิ์ของ Firebase แล้วลองซ้ำ"
+          : deletionPhase === "DELETE_RELATED_DOCUMENTS" || deletionPhase === "FINALIZE_EVENT_DELETION"
+            ? "ลบข้อมูลบางส่วนไม่สำเร็จ ระบบล็อกกิจกรรมไว้แล้ว กรุณากดลบซ้ำเพื่อดำเนินการต่อ"
+            : "ลบกิจกรรมไม่สำเร็จ ระบบล็อกกิจกรรมไว้เพื่อความปลอดภัย กรุณาลองลบซ้ำ";
     return actionState(
       "error",
       message === "EVENT_NOT_FOUND"
         ? "ไม่พบกิจกรรมนี้ในระบบ หรือรายการถูกลบแล้ว"
         : message === "CONFIRMATION_MISMATCH"
           ? "ชื่อกิจกรรมที่พิมพ์ไม่ตรงกัน ระบบยังไม่ได้ลบข้อมูล"
-          : "ลบกิจกรรมไม่สำเร็จ ระบบล็อกกิจกรรมไว้เพื่อความปลอดภัย กรุณาลองลบซ้ำ",
+          : phaseMessage,
     );
   }
 

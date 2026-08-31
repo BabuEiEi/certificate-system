@@ -2,11 +2,12 @@ import CertificateManager from "@/components/admin/CertificateManager";
 import { getEvents } from "@/lib/data/events";
 import { getParticipants } from "@/lib/data/participants";
 import { getCertificatesByParticipantId } from "@/lib/data/certificates";
+import { requireStaff } from "@/lib/auth";
 
 export const metadata = { title: "ออกเกียรติบัตร" };
 
 export default async function CertificatesPage({ searchParams }) {
-  const events = await getEvents();
+  const [actor, events] = await Promise.all([requireStaff(), getEvents()]);
   const query = await searchParams;
   const selectedEventId = events.some((event) => event.id === query.event)
     ? query.event
@@ -32,6 +33,7 @@ export default async function CertificatesPage({ searchParams }) {
         participants={participants}
         certificatesByParticipantId={certificatesByParticipantId}
         certificateHistoryByParticipantId={certificateHistoryByParticipantId}
+        canPurge={actor.role === "ADMIN"}
       />
     </section>
   );

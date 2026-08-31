@@ -380,9 +380,6 @@ export async function deleteParticipantAction(_previousState, formData) {
       .collection("certificates")
       .where("participant_id", "==", parsedId.data)
       .get();
-    if (certificateSnapshot.docs.some((document) => document.data().status === "PUBLISHED")) {
-      throw new Error("PARTICIPANT_HAS_PUBLISHED_CERTIFICATE");
-    }
     const certificateIds = certificateSnapshot.docs.map((document) => document.id);
     const auditReferences = await getAuditReferencesForParticipant(
       db,
@@ -419,8 +416,6 @@ export async function deleteParticipantAction(_previousState, formData) {
       message:
         message === "CONFIRMATION_MISMATCH"
           ? "ชื่อผู้รับที่พิมพ์ไม่ตรงกัน ระบบยังไม่ได้ลบข้อมูล"
-          : message === "PARTICIPANT_HAS_PUBLISHED_CERTIFICATE"
-            ? "ผู้รับรายนี้มีเกียรติบัตรที่เผยแพร่อยู่ กรุณายกเลิกการเผยแพร่เกียรติบัตรก่อนจึงจะลบผู้รับได้"
           : message === "EVENT_DELETION_LOCKED"
             ? "กิจกรรมนี้อยู่ระหว่างการลบ จึงไม่สามารถลบผู้รับแยกได้"
             : message === "PARTICIPANT_NOT_FOUND"

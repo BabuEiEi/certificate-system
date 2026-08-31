@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { startTransition, useMemo, useState } from "react";
 import { useActionState } from "react";
 import {
   deleteCertificateAction,
@@ -82,7 +82,7 @@ function RevokeControl({ certificateId }) {
 
     const formData = new FormData(form);
     formData.set("reason", reason);
-    formAction(formData);
+    startTransition(() => formAction(formData));
   }
 
   return (
@@ -116,7 +116,7 @@ function RepairControl({ certificateId }) {
     });
     if (!confirmed) return;
 
-    formAction(new FormData(form));
+    startTransition(() => formAction(new FormData(form)));
   }
 
   return (
@@ -147,7 +147,7 @@ function DeleteControl({ certificateId }) {
     });
     if (!confirmed) return;
 
-    formAction(new FormData(form));
+    startTransition(() => formAction(new FormData(form)));
   }
 
   return (
@@ -164,7 +164,7 @@ function DeleteControl({ certificateId }) {
   );
 }
 
-function CertificateHistory({ certificates }) {
+function CertificateHistory({ certificates, canPurge }) {
   const [open, setOpen] = useState(false);
 
   if (!certificates.length) return null;
@@ -188,7 +188,7 @@ function CertificateHistory({ certificates }) {
               <span>
                 {certificate.certificateNumber || "—"} · {statusBadge(certificate.status)}
               </span>
-              <DeleteControl certificateId={certificate.id} />
+              {canPurge ? <DeleteControl certificateId={certificate.id} /> : null}
             </li>
           ))}
         </ul>
@@ -209,6 +209,7 @@ export default function CertificateManager({
   participants,
   certificatesByParticipantId,
   certificateHistoryByParticipantId = {},
+  canPurge = false,
 }) {
   const [selectedIds, setSelectedIds] = useState([]);
 
@@ -305,6 +306,7 @@ export default function CertificateManager({
                     {statusBadge(certificate?.status)}
                     <CertificateHistory
                       certificates={certificateHistoryByParticipantId[participant.id] ?? []}
+                      canPurge={canPurge}
                     />
                   </td>
                   <td className="px-4 py-3 text-slate-500">{certificate?.certificateNumber || "—"}</td>
@@ -342,6 +344,9 @@ export default function CertificateManager({
                               <RepairControl certificateId={certificate.id} />
                               <RevokeControl certificateId={certificate.id} />
                             </>
+                          ) : null}
+                          {certificate.status === "REVOKED" && canPurge ? (
+                            <DeleteControl certificateId={certificate.id} />
                           ) : null}
                         </>
                       ) : null}
