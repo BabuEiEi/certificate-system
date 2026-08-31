@@ -6,7 +6,9 @@ import { FieldValue } from "firebase-admin/firestore";
 import { z } from "zod";
 import { requireAdmin, requireStaff } from "@/lib/auth";
 import { createAuditLogData } from "@/lib/audit";
+import { chunkItems } from "@/lib/deletion";
 import { getFirebaseAdminDb, getFirebaseAdminStorage } from "@/lib/firebase/admin";
+import { deleteDocumentReferences, deleteStoragePaths } from "@/lib/firebase/purge";
 import { createSearchTerms } from "@/lib/firebase/search";
 import { formatCertificateNumber } from "@/lib/certificateNumber";
 import { composeCertificateImage, buildCertificatePdf } from "@/lib/certificate/render";
@@ -32,6 +34,10 @@ const revokeSchema = z.object({
 });
 const repairSchema = z.object({ certificateId: documentIdSchema });
 const deleteSchema = z.object({ certificateId: documentIdSchema });
+const bulkDeleteSchema = z.object({
+  eventId: documentIdSchema,
+  certificateIds: z.array(documentIdSchema).min(1).max(1000),
+});
 
 function actionState(status, message, errors = {}) {
   return { status, message, errors, submittedAt: Date.now() };
@@ -764,4 +770,92 @@ export async function deleteCertificateAction(_previousState, formData) {
 
   revalidateCertificateViews();
   return actionState("success", "ลบเกียรติบัตรเรียบร้อยแล้ว");
+}
+
+export async function deleteCertificatesAction(_previousState, formData) {
+  const actor = await requireAdmin();
+  const certificateIds = [...new Set(formData.getAll("certificateIds"))];
+  const parsed = bulkDeleteSchema.safeParse({
+    eventId: formData.get("eventId"),
+    certificateIds,
+  });
+
+  if (!parsed.success) {
+    return actionState("error", "กรุณาเลือกเกียรติบัตรที่ยกเลิกแล้วอย่างน้อย 1 ฉบับ");
+  }
+
+  const { eventId } = parsed.data;
+  const db = getFirebaseAdminDb();
+  const certificateSnapshots = [];
+
+  try {
+    for (const ids of chunkItems(parsed.data.certificateIds, 100)) {
+      const references = ids.map((id) => db.collection("certificates").doc(id));
+      certificateSnapshots.push(...(await db.getAll(...references)));
+    }
+
+    const matchingSnapshots = certificateSnapshots.filter((snapshot) => {
+      const data = snapshot.data();
+      return snapshot.exists && data?.event_id === eventId;
+    });
+    const publishedCount = matchingSnapshots.filter(
+      (snapshot) => snapshot.data()?.status === "PUBLISHED",
+    ).length;
+    const deletableSnapshots = matchingSnapshots.filter(
+      (snapshot) => snapshot.data()?.status === "REVOKED",
+    );
+
+    if (!deletableSnapshots.length) {
+      return actionState(
+        "error",
+        publishedCount
+          ? "รายการที่เลือกยังเผยแพร่อยู่ กรุณายกเลิกเกียรติบัตรก่อนลบถาวร"
+          : "ไม่พบเกียรติบัตรที่ยกเลิกแล้วในรายการที่เลือก หรือรายการถูกลบไปแล้ว",
+      );
+    }
+
+    const storagePaths = deletableSnapshots.flatMap((snapshot) => {
+      const data = snapshot.data();
+      return [data?.png_path, data?.pdf_path].filter(Boolean);
+    });
+    for (const paths of chunkItems(storagePaths, 50)) {
+      await deleteStoragePaths(getFirebaseAdminStorage(), paths);
+    }
+    await deleteDocumentReferences(db, [
+      ...deletableSnapshots.map((snapshot) => snapshot.ref),
+      ...deletableSnapshots.map((snapshot) =>
+        db.collection("publishedCertificates").doc(snapshot.id),
+      ),
+    ]);
+
+    await db.collection("auditLogs").add(
+      createAuditLogData({
+        action: "CERTIFICATES_DELETED",
+        actor,
+        entityId: eventId,
+        entityType: "EVENT",
+        eventId,
+        metadata: {
+          eventId,
+          count: deletableSnapshots.length,
+          name: `เกียรติบัตร ${deletableSnapshots.length.toLocaleString("th-TH")} ฉบับ`,
+        },
+      }),
+    ).catch((error) => {
+      console.error("Bulk certificate deletion audit failed", { eventId, error });
+    });
+
+    revalidateCertificateViews();
+
+    const skippedCount = parsed.data.certificateIds.length - deletableSnapshots.length;
+    return actionState(
+      skippedCount ? "warning" : "success",
+      skippedCount
+        ? `ลบเกียรติบัตรถาวรแล้ว ${deletableSnapshots.length.toLocaleString("th-TH")} ฉบับ และข้าม ${skippedCount.toLocaleString("th-TH")} ฉบับที่ไม่พบหรือยังไม่ได้ยกเลิก`
+        : `ลบเกียรติบัตรถาวรแล้ว ${deletableSnapshots.length.toLocaleString("th-TH")} ฉบับ`,
+    );
+  } catch (error) {
+    console.error("Bulk certificate deletion failed", { eventId, certificateIds, error });
+    return actionState("error", "ไม่สามารถลบเกียรติบัตรที่เลือกได้ กรุณาลองใหม่");
+  }
 }

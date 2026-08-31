@@ -22,6 +22,7 @@ const actionLabels = {
   CERTIFICATE_FILE_REPAIRED: "ซ่อมไฟล์เกียรติบัตร",
   CERTIFICATE_REVOKED: "ยกเลิกเกียรติบัตร",
   CERTIFICATE_DELETED: "ลบเกียรติบัตรถาวร",
+  CERTIFICATES_DELETED: "ลบเกียรติบัตรถาวรหลายฉบับ",
   SETTINGS_UPDATED: "แก้ไขการตั้งค่าเลขเกียรติบัตร",
   USER_CREATED: "เพิ่มบัญชีผู้ใช้งาน",
   USER_ROLE_UPDATED: "แก้ไขบทบาทผู้ใช้งาน",

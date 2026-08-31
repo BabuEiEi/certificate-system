@@ -1,10 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { startTransition, useMemo, useState } from "react";
-import { useActionState } from "react";
+import { startTransition, useActionState, useEffect, useMemo, useState } from "react";
 import {
   deleteCertificateAction,
+  deleteCertificatesAction,
   issueCertificatesAction,
   repairCertificateFileAction,
   revokeCertificateAction,
@@ -164,7 +164,56 @@ function DeleteControl({ certificateId }) {
   );
 }
 
-function CertificateHistory({ certificates, canPurge }) {
+function BulkDeleteControl({ eventId, selectedIds, setSelectedIds }) {
+  const [state, formAction, pending] = useActionState(
+    deleteCertificatesAction,
+    initialActionState,
+  );
+  useActionAlert(state);
+
+  useEffect(() => {
+    if (state.status === "success" || state.status === "warning") {
+      setSelectedIds([]);
+    }
+  }, [setSelectedIds, state.status, state.submittedAt]);
+
+  async function handleSubmit(event) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const count = selectedIds.length.toLocaleString("th-TH");
+    const confirmed = await confirmAppAction({
+      title: `ลบเกียรติบัตรถาวร ${count} ฉบับ`,
+      message: "ระบบจะลบเกียรติบัตรที่เลือก ทะเบียนสาธารณะ และไฟล์ที่เกี่ยวข้องอย่างถาวร ไม่สามารถกู้คืนได้",
+      confirmButtonText: "ลบรายการที่เลือก",
+    });
+    if (!confirmed) return;
+
+    startTransition(() => formAction(new FormData(form)));
+  }
+
+  return (
+    <form onSubmit={handleSubmit}>
+      <input type="hidden" name="eventId" value={eventId} />
+      {selectedIds.map((id) => (
+        <input key={id} type="hidden" name="certificateIds" value={id} />
+      ))}
+      <button
+        type="submit"
+        disabled={pending || !selectedIds.length}
+        className="rounded-xl bg-rose-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        {pending ? "กำลังลบรายการที่เลือก…" : `ลบถาวรที่เลือก (${selectedIds.length})`}
+      </button>
+    </form>
+  );
+}
+
+function CertificateHistory({
+  certificates,
+  canPurge,
+  selectedCertificateIds,
+  onToggleCertificate,
+}) {
   const [open, setOpen] = useState(false);
 
   if (!certificates.length) return null;
@@ -180,17 +229,30 @@ function CertificateHistory({ certificates, canPurge }) {
       </button>
       {open ? (
         <ul className="mt-2 space-y-2">
-          {certificates.map((certificate) => (
-            <li
-              key={certificate.id}
-              className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 text-xs text-slate-500"
-            >
-              <span>
-                {certificate.certificateNumber || "—"} · {statusBadge(certificate.status)}
-              </span>
-              {canPurge ? <DeleteControl certificateId={certificate.id} /> : null}
-            </li>
-          ))}
+          {certificates.map((certificate) => {
+            const canDelete = canPurge && certificate.status === "REVOKED";
+            return (
+              <li
+                key={certificate.id}
+                className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 text-xs text-slate-500"
+              >
+                <label className={canDelete ? "flex cursor-pointer items-center gap-2" : "flex items-center gap-2"}>
+                  {canDelete ? (
+                    <input
+                      type="checkbox"
+                      checked={selectedCertificateIds.includes(certificate.id)}
+                      onChange={(event) => onToggleCertificate(certificate.id, event.target.checked)}
+                      aria-label={`เลือกเกียรติบัตร ${certificate.certificateNumber || certificate.id} เพื่อลบถาวร`}
+                    />
+                  ) : null}
+                  <span>
+                    {certificate.certificateNumber || "—"} · {statusBadge(certificate.status)}
+                  </span>
+                </label>
+                {canDelete ? <DeleteControl certificateId={certificate.id} /> : null}
+              </li>
+            );
+          })}
         </ul>
       ) : null}
     </div>
@@ -212,11 +274,24 @@ export default function CertificateManager({
   canPurge = false,
 }) {
   const [selectedIds, setSelectedIds] = useState([]);
+  const [selectedCertificateIds, setSelectedCertificateIds] = useState([]);
 
   const eligibleParticipants = useMemo(
     () => participants.filter((participant) => participant.status === "ELIGIBLE"),
     [participants],
   );
+
+  const deletableCertificateIds = useMemo(() => {
+    const ids = [];
+    participants.forEach((participant) => {
+      const current = certificatesByParticipantId[participant.id];
+      if (current?.status === "REVOKED") ids.push(current.id);
+      (certificateHistoryByParticipantId[participant.id] ?? []).forEach((certificate) => {
+        if (certificate.status === "REVOKED") ids.push(certificate.id);
+      });
+    });
+    return [...new Set(ids)];
+  }, [certificateHistoryByParticipantId, certificatesByParticipantId, participants]);
 
   function toggleEvent(eventId) {
     const url = new URL(window.location.href);
@@ -242,9 +317,24 @@ export default function CertificateManager({
     );
   }
 
+  function toggleCertificate(certificateId, checked) {
+    setSelectedCertificateIds((current) =>
+      checked
+        ? current.includes(certificateId) ? current : [...current, certificateId]
+        : current.filter((id) => id !== certificateId),
+    );
+  }
+
+  function toggleAllDeletableCertificates(checked) {
+    setSelectedCertificateIds(checked ? deletableCertificateIds : []);
+  }
+
   const unissuedCount = eligibleParticipants.filter(
     (participant) => canIssue(certificatesByParticipantId[participant.id]),
   ).length;
+  const allDeletableSelected =
+    deletableCertificateIds.length > 0
+    && deletableCertificateIds.every((id) => selectedCertificateIds.includes(id));
 
   return (
     <div className="space-y-6">
@@ -265,6 +355,29 @@ export default function CertificateManager({
         </label>
         <IssueButton eventId={selectedEventId} selectedIds={selectedIds} />
       </div>
+
+      {canPurge && deletableCertificateIds.length ? (
+        <div className="flex flex-col gap-4 rounded-2xl border border-rose-200 bg-rose-50/70 p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <label className="flex cursor-pointer items-center gap-3 text-sm font-semibold text-rose-800">
+              <input
+                type="checkbox"
+                checked={allDeletableSelected}
+                onChange={(event) => toggleAllDeletableCertificates(event.target.checked)}
+              />
+              เลือกเกียรติบัตรที่ยกเลิกแล้วทั้งหมด ({deletableCertificateIds.length})
+            </label>
+            <p className="mt-1 pl-7 text-xs leading-5 text-rose-600">
+              เลือกบางฉบับได้จากช่องหน้าเลขที่เกียรติบัตรในรายการด้านล่าง
+            </p>
+          </div>
+          <BulkDeleteControl
+            eventId={selectedEventId}
+            selectedIds={selectedCertificateIds}
+            setSelectedIds={setSelectedCertificateIds}
+          />
+        </div>
+      ) : null}
 
       <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
         <table className="min-w-full divide-y divide-slate-200 text-sm">
@@ -307,6 +420,8 @@ export default function CertificateManager({
                     <CertificateHistory
                       certificates={certificateHistoryByParticipantId[participant.id] ?? []}
                       canPurge={canPurge}
+                      selectedCertificateIds={selectedCertificateIds}
+                      onToggleCertificate={toggleCertificate}
                     />
                   </td>
                   <td className="px-4 py-3 text-slate-500">{certificate?.certificateNumber || "—"}</td>
@@ -346,7 +461,18 @@ export default function CertificateManager({
                             </>
                           ) : null}
                           {certificate.status === "REVOKED" && canPurge ? (
-                            <DeleteControl certificateId={certificate.id} />
+                            <>
+                              <label className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-rose-200 bg-white px-3 py-1.5 text-xs font-semibold text-rose-700">
+                                <input
+                                  type="checkbox"
+                                  checked={selectedCertificateIds.includes(certificate.id)}
+                                  onChange={(event) => toggleCertificate(certificate.id, event.target.checked)}
+                                  aria-label={`เลือกเกียรติบัตร ${certificate.certificateNumber || certificate.id} เพื่อลบถาวร`}
+                                />
+                                เลือก
+                              </label>
+                              <DeleteControl certificateId={certificate.id} />
+                            </>
                           ) : null}
                         </>
                       ) : null}
