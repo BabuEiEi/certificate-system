@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import SearchForm from "@/components/public/SearchForm";
 import { getPublicEvents } from "@/lib/data/publicCertificates";
 
@@ -15,8 +16,15 @@ export default async function HomePage() {
       <div className="relative mx-auto flex w-full max-w-6xl flex-col px-5 py-6 sm:px-8 sm:py-8 lg:px-10">
         <header className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand text-lg font-bold text-white shadow-md shadow-blue-900/20">
-              C
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-white p-1 shadow-md shadow-blue-900/15">
+              <Image
+                src="https://cdn.jsdelivr.net/gh/BabuEiEi/images/obec.png"
+                alt="ตราสำนักงานคณะกรรมการการศึกษาขั้นพื้นฐาน"
+                width={40}
+                height={40}
+                priority
+                className="h-10 w-10 object-contain"
+              />
             </div>
             <div>
               <p className="text-sm font-bold text-slate-800">ระบบเกียรติบัตรออนไลน์</p>
@@ -56,7 +64,7 @@ export default async function HomePage() {
         </section>
 
         <footer className="border-t border-slate-200/70 pt-5 text-center text-xs text-slate-400">
-          Certificate Management System
+          พัฒนาโดย © 2026 | นายภัทรพล แก้วเสนา ศึกษานิเทศก์ สพม.พิษณุโลก อุตรดิตถ์
         </footer>
       </div>
     </main>

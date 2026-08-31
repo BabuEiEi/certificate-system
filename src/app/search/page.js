@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import SearchForm from "@/components/public/SearchForm";
 import EmptyState from "@/components/ui/EmptyState";
 import {
@@ -26,7 +27,16 @@ export default async function SearchPage({ searchParams }) {
       <header className="border-b border-slate-200 bg-white">
         <div className="mx-auto flex max-w-5xl items-center justify-between px-5 py-4 sm:px-8">
           <Link href="/" className="flex items-center gap-3 font-bold text-slate-800">
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand text-white">C</span>
+            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-white p-1 shadow-sm ring-1 ring-slate-100">
+              <Image
+                src="https://cdn.jsdelivr.net/gh/BabuEiEi/images/obec.png"
+                alt="ตราสำนักงานคณะกรรมการการศึกษาขั้นพื้นฐาน"
+                width={36}
+                height={36}
+                priority
+                className="h-9 w-9 object-contain"
+              />
+            </span>
             <span className="hidden sm:inline">ระบบเกียรติบัตรออนไลน์</span>
           </Link>
           <Link href="/login" className="text-xs font-semibold text-slate-500 hover:text-brand">

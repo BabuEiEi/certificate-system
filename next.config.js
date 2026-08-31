@@ -1,6 +1,15 @@
 /** @type {import("next").NextConfig} */
 const nextConfig = {
   allowedDevOrigins: ["192.168.1.11"],
+  images: {
+    remotePatterns: [
+      {
+        protocol: "https",
+        hostname: "cdn.jsdelivr.net",
+        pathname: "/gh/BabuEiEi/images/obec.png",
+      },
+    ],
+  },
   // @napi-rs/canvas ships prebuilt native (.node) binaries that must be
   // loaded via require() at runtime, not bundled by webpack.
   // pdfjs-dist resolves its worker script (pdf.worker.mjs) as a file next to

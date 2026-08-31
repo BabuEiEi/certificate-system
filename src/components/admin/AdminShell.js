@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { joinClassNames } from "@/lib/utils";
@@ -41,8 +42,15 @@ export default function AdminShell({ children, user }) {
       >
         <div className="flex h-20 items-center justify-between border-b border-white/10 px-6">
           <Link href="/admin/dashboard" className="flex items-center gap-3" onClick={() => setSidebarOpen(false)}>
-            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-white text-lg font-bold text-brand-dark">
-              C
+            <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-white p-1">
+              <Image
+                src="https://cdn.jsdelivr.net/gh/BabuEiEi/images/obec.png"
+                alt="ตราสำนักงานคณะกรรมการการศึกษาขั้นพื้นฐาน"
+                width={40}
+                height={40}
+                priority
+                className="h-10 w-10 object-contain"
+              />
             </span>
             <span>
               <span className="block text-sm font-bold">ระบบเกียรติบัตร</span>
