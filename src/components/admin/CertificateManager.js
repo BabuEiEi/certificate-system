@@ -343,6 +343,20 @@ export default function CertificateManager({
       .map((certificate) => certificate.id),
     [certificatesByParticipantId, eligibleParticipants],
   );
+  const issuableParticipantIds = useMemo(
+    () => eligibleParticipants
+      .filter((participant) => canIssue(certificatesByParticipantId[participant.id]))
+      .map((participant) => participant.id),
+    [certificatesByParticipantId, eligibleParticipants],
+  );
+  const activeSelectedIssueParticipantIds = useMemo(() => {
+    const issuableIds = new Set(issuableParticipantIds);
+    return selectedIds.filter((id) => issuableIds.has(id));
+  }, [issuableParticipantIds, selectedIds]);
+  const activeSelectedIssueParticipantIdSet = useMemo(
+    () => new Set(activeSelectedIssueParticipantIds),
+    [activeSelectedIssueParticipantIds],
+  );
   const activeSelectedRevokeCertificateIds = useMemo(() => {
     const publishedIds = new Set(publishedCertificateIds);
     return selectedRevokeCertificateIds.filter((id) => publishedIds.has(id));
@@ -364,16 +378,9 @@ export default function CertificateManager({
     );
   }
 
-  function toggleAllUnissued(checked) {
-    if (!checked) {
-      setSelectedIds([]);
-      return;
-    }
-    setSelectedIds(
-      eligibleParticipants
-        .filter((participant) => canIssue(certificatesByParticipantId[participant.id]))
-        .map((participant) => participant.id),
-    );
+  function toggleAllRows(checked) {
+    setSelectedIds(checked ? issuableParticipantIds : []);
+    setSelectedRevokeCertificateIds(checked ? publishedCertificateIds : []);
   }
 
   function toggleCertificate(certificateId, checked) {
@@ -396,9 +403,10 @@ export default function CertificateManager({
     setSelectedCertificateIds(checked ? deletableCertificateIds : []);
   }
 
-  const unissuedCount = eligibleParticipants.filter(
-    (participant) => canIssue(certificatesByParticipantId[participant.id]),
-  ).length;
+  const selectableRowCount = issuableParticipantIds.length + publishedCertificateIds.length;
+  const selectedRowCount =
+    activeSelectedIssueParticipantIds.length + activeSelectedRevokeCertificateIds.length;
+  const allRowsSelected = selectableRowCount > 0 && selectedRowCount === selectableRowCount;
   const allDeletableSelected =
     deletableCertificateIds.length > 0
     && deletableCertificateIds.every((id) => selectedCertificateIds.includes(id));
@@ -420,7 +428,10 @@ export default function CertificateManager({
           </select>
         </label>
         <div className="flex flex-wrap items-end gap-3">
-          <IssueButton eventId={selectedEventId} selectedIds={selectedIds} />
+          <IssueButton
+            eventId={selectedEventId}
+            selectedIds={activeSelectedIssueParticipantIds}
+          />
           <RevokeSelectedControl
             eventId={selectedEventId}
             selectedIds={activeSelectedRevokeCertificateIds}
@@ -458,9 +469,10 @@ export default function CertificateManager({
               <th className="px-4 py-3">
                 <input
                   type="checkbox"
-                  checked={unissuedCount > 0 && selectedIds.length === unissuedCount}
-                  onChange={(event) => toggleAllUnissued(event.target.checked)}
-                  disabled={!unissuedCount}
+                  checked={allRowsSelected}
+                  onChange={(event) => toggleAllRows(event.target.checked)}
+                  disabled={!selectableRowCount}
+                  aria-label="เลือกหรือยกเลิกการเลือกเกียรติบัตรทุกแถว"
                 />
               </th>
               <th className="px-4 py-3">ชื่อ-นามสกุล</th>
@@ -482,7 +494,7 @@ export default function CertificateManager({
                       checked={
                         isPublished
                           ? activeSelectedRevokeCertificateIdSet.has(certificate.id)
-                          : selectedIds.includes(participant.id)
+                          : activeSelectedIssueParticipantIdSet.has(participant.id)
                       }
                       disabled={!isPublished && !canIssue(certificate)}
                       onChange={(event) => {
