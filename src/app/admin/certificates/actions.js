@@ -32,6 +32,11 @@ const revokeSchema = z.object({
   certificateId: documentIdSchema,
   reason: z.string().trim().max(500).optional().default(""),
 });
+const bulkRevokeSchema = z.object({
+  eventId: documentIdSchema,
+  certificateIds: z.array(documentIdSchema).min(1).max(500),
+  reason: z.string().trim().max(500).optional().default(""),
+});
 const repairSchema = z.object({ certificateId: documentIdSchema });
 const deleteSchema = z.object({ certificateId: documentIdSchema });
 const bulkDeleteSchema = z.object({
@@ -707,6 +712,132 @@ export async function revokeCertificateAction(_previousState, formData) {
   revalidateCertificateViews();
 
   return actionState("success", "ยกเลิกเกียรติบัตรเรียบร้อยแล้ว");
+}
+
+export async function revokeCertificatesAction(_previousState, formData) {
+  const actor = await requireStaff();
+  const certificateIds = [...new Set(formData.getAll("certificateIds"))];
+  const parsed = bulkRevokeSchema.safeParse({
+    eventId: formData.get("eventId"),
+    certificateIds,
+    reason: formData.get("reason"),
+  });
+
+  if (!parsed.success) {
+    return actionState(
+      "error",
+      "กรุณาเลือกเกียรติบัตรที่เผยแพร่อยู่ตั้งแต่ 1 ฉบับขึ้นไป",
+      parsed.error.flatten().fieldErrors,
+    );
+  }
+
+  const { eventId, reason } = parsed.data;
+  const db = getFirebaseAdminDb();
+  const certificateSnapshots = [];
+
+  try {
+    for (const ids of chunkItems(parsed.data.certificateIds, 100)) {
+      const references = ids.map((id) => db.collection("certificates").doc(id));
+      certificateSnapshots.push(...(await db.getAll(...references)));
+    }
+  } catch (error) {
+    console.error("Bulk certificate revoke lookup failed", { eventId, certificateIds, error });
+    return actionState("error", "ไม่สามารถตรวจสอบเกียรติบัตรที่เลือกได้ กรุณาลองใหม่");
+  }
+
+  const revokableSnapshots = certificateSnapshots.filter((snapshot) => {
+    const data = snapshot.data();
+    return snapshot.exists && data?.event_id === eventId && data?.status === "PUBLISHED";
+  });
+
+  if (!revokableSnapshots.length) {
+    return actionState(
+      "error",
+      "ไม่พบเกียรติบัตรที่กำลังเผยแพร่ในรายการที่เลือก หรือรายการถูกยกเลิกไปแล้ว",
+    );
+  }
+
+  const revokedSnapshots = [];
+
+  try {
+    // Each certificate uses two writes. Keeping each batch below 500 writes
+    // leaves headroom and supports all 500 rows that the page can display.
+    for (const snapshots of chunkItems(revokableSnapshots, 200)) {
+      const batch = db.batch();
+      snapshots.forEach((snapshot) => {
+        batch.set(
+          snapshot.ref,
+          {
+            status: "REVOKED",
+            revoke_reason: reason,
+            png_path: "",
+            pdf_path: "",
+            revoked_at: FieldValue.serverTimestamp(),
+            updated_at: FieldValue.serverTimestamp(),
+            updated_by: actor.id,
+          },
+          { merge: true },
+        );
+        batch.set(
+          db.collection("publishedCertificates").doc(snapshot.id),
+          {
+            status: "REVOKED",
+            revoke_reason: reason,
+            has_png: false,
+            has_pdf: false,
+            revoked_at: FieldValue.serverTimestamp(),
+          },
+          { merge: true },
+        );
+      });
+      await batch.commit();
+      revokedSnapshots.push(...snapshots);
+    }
+  } catch (error) {
+    console.error("Bulk certificate revoke failed", { eventId, certificateIds, error });
+  }
+
+  if (!revokedSnapshots.length) {
+    return actionState("error", "ไม่สามารถยกเลิกเกียรติบัตรที่เลือกได้ กรุณาลองใหม่");
+  }
+
+  const storagePaths = revokedSnapshots.flatMap((snapshot) => {
+    const data = snapshot.data();
+    return [data?.png_path, data?.pdf_path].filter(Boolean);
+  });
+  for (const paths of chunkItems(storagePaths, 50)) {
+    await deleteStoragePaths(getFirebaseAdminStorage(), paths).catch((error) => {
+      console.error("Bulk revoked certificate file cleanup failed", { eventId, error });
+    });
+  }
+
+  await db.collection("auditLogs").add(
+    createAuditLogData({
+      action: "CERTIFICATES_REVOKED",
+      actor,
+      entityId: eventId,
+      entityType: "EVENT",
+      eventId,
+      metadata: {
+        eventId,
+        reason,
+        count: revokedSnapshots.length,
+        name: `เกียรติบัตร ${revokedSnapshots.length.toLocaleString("th-TH")} ฉบับ`,
+      },
+    }),
+  ).catch((error) => {
+    console.error("Bulk certificate revoke audit failed", { eventId, error });
+  });
+
+  revalidateCertificateViews();
+
+  const skippedCount = parsed.data.certificateIds.length - revokedSnapshots.length;
+  return actionState(
+    skippedCount ? "warning" : "success",
+    skippedCount
+      ? `ยกเลิกเกียรติบัตรแล้ว ${revokedSnapshots.length.toLocaleString("th-TH")} ฉบับ และข้าม ${skippedCount.toLocaleString("th-TH")} ฉบับที่ไม่พบ ถูกยกเลิกแล้ว หรือดำเนินการไม่สำเร็จ`
+      : `ยกเลิกเกียรติบัตรแล้ว ${revokedSnapshots.length.toLocaleString("th-TH")} ฉบับ`,
+  );
 }
 
 // ADMIN-only, and only for a certificate that isn't the live PUBLISHED one --

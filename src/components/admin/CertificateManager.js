@@ -8,6 +8,7 @@ import {
   issueCertificatesAction,
   repairCertificateFileAction,
   revokeCertificateAction,
+  revokeCertificatesAction,
 } from "@/app/admin/certificates/actions";
 import { CERTIFICATE_FILE_RETENTION_DAYS } from "@/lib/certificate/retention";
 import { confirmAppAction, promptAppInput, useActionAlert } from "@/lib/sweetAlert";
@@ -94,6 +95,47 @@ function RevokeControl({ certificateId }) {
         className="rounded-lg border border-rose-200 px-3 py-1.5 text-xs font-semibold text-rose-600 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"
       >
         {pending ? "กำลังยกเลิก…" : "ยกเลิก"}
+      </button>
+    </form>
+  );
+}
+
+function RevokeSelectedControl({ eventId, selectedIds }) {
+  const [state, formAction, pending] = useActionState(
+    revokeCertificatesAction,
+    initialActionState,
+  );
+  useActionAlert(state);
+
+  async function handleSubmit(event) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const count = selectedIds.length.toLocaleString("th-TH");
+    const { isConfirmed, value: reason } = await promptAppInput({
+      title: `ยืนยันการยกเลิกเกียรติบัตร ${count} ฉบับ`,
+      message: "เกียรติบัตรที่เลือกจะถูกยกเลิกและแสดงสถานะดังกล่าวในหน้าตรวจสอบสาธารณะ โดยใช้เหตุผลเดียวกันทุกรายการ",
+      inputLabel: "เหตุผลการยกเลิก (ไม่บังคับ)",
+      confirmButtonText: "ยกเลิกเกียรติบัตรที่เลือก",
+    });
+    if (!isConfirmed) return;
+
+    const formData = new FormData(form);
+    formData.set("reason", reason);
+    startTransition(() => formAction(formData));
+  }
+
+  return (
+    <form onSubmit={handleSubmit}>
+      <input type="hidden" name="eventId" value={eventId} />
+      {selectedIds.map((id) => (
+        <input key={id} type="hidden" name="certificateIds" value={id} />
+      ))}
+      <button
+        type="submit"
+        disabled={pending || !selectedIds.length}
+        className="rounded-xl bg-rose-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        {pending ? "กำลังยกเลิกเกียรติบัตร…" : `ยกเลิกเกียรติบัตร (${selectedIds.length})`}
       </button>
     </form>
   );
@@ -274,6 +316,7 @@ export default function CertificateManager({
   canPurge = false,
 }) {
   const [selectedIds, setSelectedIds] = useState([]);
+  const [selectedRevokeCertificateIds, setSelectedRevokeCertificateIds] = useState([]);
   const [selectedCertificateIds, setSelectedCertificateIds] = useState([]);
 
   const eligibleParticipants = useMemo(
@@ -292,6 +335,22 @@ export default function CertificateManager({
     });
     return [...new Set(ids)];
   }, [certificateHistoryByParticipantId, certificatesByParticipantId, participants]);
+
+  const publishedCertificateIds = useMemo(
+    () => eligibleParticipants
+      .map((participant) => certificatesByParticipantId[participant.id])
+      .filter((certificate) => certificate?.status === "PUBLISHED")
+      .map((certificate) => certificate.id),
+    [certificatesByParticipantId, eligibleParticipants],
+  );
+  const activeSelectedRevokeCertificateIds = useMemo(() => {
+    const publishedIds = new Set(publishedCertificateIds);
+    return selectedRevokeCertificateIds.filter((id) => publishedIds.has(id));
+  }, [publishedCertificateIds, selectedRevokeCertificateIds]);
+  const activeSelectedRevokeCertificateIdSet = useMemo(
+    () => new Set(activeSelectedRevokeCertificateIds),
+    [activeSelectedRevokeCertificateIds],
+  );
 
   function toggleEvent(eventId) {
     const url = new URL(window.location.href);
@@ -325,6 +384,14 @@ export default function CertificateManager({
     );
   }
 
+  function toggleRevokeCertificate(certificateId, checked) {
+    setSelectedRevokeCertificateIds((current) =>
+      checked
+        ? current.includes(certificateId) ? current : [...current, certificateId]
+        : current.filter((id) => id !== certificateId),
+    );
+  }
+
   function toggleAllDeletableCertificates(checked) {
     setSelectedCertificateIds(checked ? deletableCertificateIds : []);
   }
@@ -335,7 +402,6 @@ export default function CertificateManager({
   const allDeletableSelected =
     deletableCertificateIds.length > 0
     && deletableCertificateIds.every((id) => selectedCertificateIds.includes(id));
-
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-4">
@@ -353,7 +419,13 @@ export default function CertificateManager({
             ))}
           </select>
         </label>
-        <IssueButton eventId={selectedEventId} selectedIds={selectedIds} />
+        <div className="flex flex-wrap items-end gap-3">
+          <IssueButton eventId={selectedEventId} selectedIds={selectedIds} />
+          <RevokeSelectedControl
+            eventId={selectedEventId}
+            selectedIds={activeSelectedRevokeCertificateIds}
+          />
+        </div>
       </div>
 
       {canPurge && deletableCertificateIds.length ? (
@@ -401,14 +473,30 @@ export default function CertificateManager({
           <tbody className="divide-y divide-slate-100">
             {eligibleParticipants.map((participant) => {
               const certificate = certificatesByParticipantId[participant.id];
+              const isPublished = certificate?.status === "PUBLISHED";
               return (
                 <tr key={participant.id}>
                   <td className="px-4 py-3">
                     <input
                       type="checkbox"
-                      checked={selectedIds.includes(participant.id)}
-                      disabled={!canIssue(certificate)}
-                      onChange={(event) => toggleParticipant(participant.id, event.target.checked)}
+                      checked={
+                        isPublished
+                          ? activeSelectedRevokeCertificateIdSet.has(certificate.id)
+                          : selectedIds.includes(participant.id)
+                      }
+                      disabled={!isPublished && !canIssue(certificate)}
+                      onChange={(event) => {
+                        if (isPublished) {
+                          toggleRevokeCertificate(certificate.id, event.target.checked);
+                          return;
+                        }
+                        toggleParticipant(participant.id, event.target.checked);
+                      }}
+                      aria-label={
+                        isPublished
+                          ? `เลือกเกียรติบัตรของ ${participant.fullName} เพื่อยกเลิก`
+                          : `เลือก ${participant.fullName} เพื่อออกเกียรติบัตร`
+                      }
                     />
                   </td>
                   <td className="px-4 py-3 font-medium text-slate-700">{participant.fullName}</td>
