@@ -378,9 +378,14 @@ export default function CertificateManager({
     );
   }
 
-  function toggleAllRows(checked) {
-    setSelectedIds(checked ? issuableParticipantIds : []);
-    setSelectedRevokeCertificateIds(checked ? publishedCertificateIds : []);
+  function toggleAllIssuableParticipants() {
+    setSelectedIds(allIssuableSelected ? [] : issuableParticipantIds);
+  }
+
+  function toggleAllPublishedCertificates() {
+    setSelectedRevokeCertificateIds(
+      allPublishedSelected ? [] : publishedCertificateIds,
+    );
   }
 
   function toggleCertificate(certificateId, checked) {
@@ -403,10 +408,12 @@ export default function CertificateManager({
     setSelectedCertificateIds(checked ? deletableCertificateIds : []);
   }
 
-  const selectableRowCount = issuableParticipantIds.length + publishedCertificateIds.length;
-  const selectedRowCount =
-    activeSelectedIssueParticipantIds.length + activeSelectedRevokeCertificateIds.length;
-  const allRowsSelected = selectableRowCount > 0 && selectedRowCount === selectableRowCount;
+  const allIssuableSelected =
+    issuableParticipantIds.length > 0
+    && activeSelectedIssueParticipantIds.length === issuableParticipantIds.length;
+  const allPublishedSelected =
+    publishedCertificateIds.length > 0
+    && activeSelectedRevokeCertificateIds.length === publishedCertificateIds.length;
   const allDeletableSelected =
     deletableCertificateIds.length > 0
     && deletableCertificateIds.every((id) => selectedCertificateIds.includes(id));
@@ -427,15 +434,45 @@ export default function CertificateManager({
             ))}
           </select>
         </label>
-        <div className="flex flex-wrap items-end gap-3">
-          <IssueButton
-            eventId={selectedEventId}
-            selectedIds={activeSelectedIssueParticipantIds}
-          />
-          <RevokeSelectedControl
-            eventId={selectedEventId}
-            selectedIds={activeSelectedRevokeCertificateIds}
-          />
+        <div className="flex flex-col gap-3 xl:items-end">
+          <div className="flex flex-wrap items-end gap-3">
+            <button
+              type="button"
+              aria-pressed={allIssuableSelected}
+              disabled={!issuableParticipantIds.length}
+              onClick={toggleAllIssuableParticipants}
+              className={`rounded-xl border px-4 py-2.5 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 ${
+                allIssuableSelected
+                  ? "border-brand bg-blue-50 text-brand"
+                  : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+              }`}
+            >
+              {allIssuableSelected ? "ยกเลิกการเลือก" : "เลือกทั้งหมดที่ยังไม่ออก"} ({issuableParticipantIds.length})
+            </button>
+            <IssueButton
+              eventId={selectedEventId}
+              selectedIds={activeSelectedIssueParticipantIds}
+            />
+          </div>
+          <div className="flex flex-wrap items-center justify-end gap-3">
+            <button
+              type="button"
+              aria-pressed={allPublishedSelected}
+              disabled={!publishedCertificateIds.length}
+              onClick={toggleAllPublishedCertificates}
+              className={`rounded-xl border px-4 py-2.5 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 ${
+                allPublishedSelected
+                  ? "border-rose-300 bg-rose-50 text-rose-700"
+                  : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+              }`}
+            >
+              {allPublishedSelected ? "ยกเลิกการเลือก" : "เลือกทั้งหมดที่เผยแพร่แล้ว"} ({publishedCertificateIds.length})
+            </button>
+            <RevokeSelectedControl
+              eventId={selectedEventId}
+              selectedIds={activeSelectedRevokeCertificateIds}
+            />
+          </div>
         </div>
       </div>
 
@@ -466,15 +503,7 @@ export default function CertificateManager({
         <table className="min-w-full divide-y divide-slate-200 text-sm">
           <thead className="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
             <tr>
-              <th className="px-4 py-3">
-                <input
-                  type="checkbox"
-                  checked={allRowsSelected}
-                  onChange={(event) => toggleAllRows(event.target.checked)}
-                  disabled={!selectableRowCount}
-                  aria-label="เลือกหรือยกเลิกการเลือกเกียรติบัตรทุกแถว"
-                />
-              </th>
+              <th className="px-4 py-3">เลือก</th>
               <th className="px-4 py-3">ชื่อ-นามสกุล</th>
               <th className="px-4 py-3">ประเภทเกียรติบัตร</th>
               <th className="px-4 py-3">สถานะ</th>
