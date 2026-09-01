@@ -12,6 +12,7 @@ import {
 } from "@/app/admin/certificates/actions";
 import { CERTIFICATE_FILE_RETENTION_DAYS } from "@/lib/certificate/retention";
 import { confirmAppAction, promptAppInput, useActionAlert } from "@/lib/sweetAlert";
+import { exportCertificatesToExcel } from "@/lib/excel";
 import { getCertificateTypeLabel } from "@/lib/participant";
 
 const initialActionState = { status: "idle", message: "", errors: {}, submittedAt: 0 };
@@ -250,6 +251,36 @@ function BulkDeleteControl({ eventId, selectedIds, setSelectedIds }) {
   );
 }
 
+function ExportButton({ event, participants, certificatesByParticipantId }) {
+  const [pending, setPending] = useState(false);
+
+  async function handleExport() {
+    setPending(true);
+    try {
+      await exportCertificatesToExcel({ event, participants, certificatesByParticipantId });
+    } catch (error) {
+      confirmAppAction({
+        title: "ส่งออกไม่สำเร็จ",
+        message: error?.message || "ไม่สามารถส่งออกข้อมูลเป็น Excel ได้",
+        confirmButtonText: "ตกลง",
+      });
+    } finally {
+      setPending(false);
+    }
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={handleExport}
+      disabled={pending || !participants.length}
+      className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+    >
+      {pending ? "กำลังส่งออก…" : "ส่งออก Excel"}
+    </button>
+  );
+}
+
 function CertificateHistory({
   certificates,
   canPurge,
@@ -417,23 +448,31 @@ export default function CertificateManager({
   const allDeletableSelected =
     deletableCertificateIds.length > 0
     && deletableCertificateIds.every((id) => selectedCertificateIds.includes(id));
+  const selectedEvent = events.find((event) => event.id === selectedEventId);
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-4">
-        <label className="text-sm font-semibold text-slate-700">
-          กิจกรรม
-          <select
-            className={selectClassName}
-            value={selectedEventId}
-            onChange={(event) => toggleEvent(event.target.value)}
-          >
-            {events.map((event) => (
-              <option key={event.id} value={event.id}>
-                {event.name}
-              </option>
-            ))}
-          </select>
-        </label>
+        <div className="flex flex-wrap items-end gap-3">
+          <label className="text-sm font-semibold text-slate-700">
+            กิจกรรม
+            <select
+              className={selectClassName}
+              value={selectedEventId}
+              onChange={(event) => toggleEvent(event.target.value)}
+            >
+              {events.map((event) => (
+                <option key={event.id} value={event.id}>
+                  {event.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <ExportButton
+            event={selectedEvent}
+            participants={eligibleParticipants}
+            certificatesByParticipantId={certificatesByParticipantId}
+          />
+        </div>
         <div className="flex flex-col gap-3 xl:items-end">
           <div className="flex flex-wrap items-end gap-3">
             <button

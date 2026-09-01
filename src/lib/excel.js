@@ -3,6 +3,15 @@ import {
   getParticipantStatusLabel,
 } from "@/lib/participant";
 
+const certificateStatusLabels = {
+  PUBLISHED: "เผยแพร่แล้ว",
+  REVOKED: "ยกเลิกแล้ว",
+};
+
+function getCertificateStatusLabel(status) {
+  return certificateStatusLabels[status] ?? "ยังไม่ออก";
+}
+
 const headerStyle = {
   fontWeight: "bold",
   textColor: "#FFFFFF",
@@ -259,5 +268,40 @@ export async function exportParticipantsToExcel({ event, participants }) {
       stickyRowsCount: 1,
     },
     `รายชื่อผู้รับ-${sanitizeFileName(event?.name)}.xlsx`,
+  );
+}
+
+export async function exportCertificatesToExcel({ event, participants, certificatesByParticipantId }) {
+  const data = [
+    [
+      header("ชื่อ-นามสกุล"),
+      header("ประเภทเกียรติบัตร"),
+      header("เลขที่เกียรติบัตร"),
+      header("สถานะ"),
+    ],
+    ...participants.map((participant) => {
+      const certificate = certificatesByParticipantId[participant.id];
+      return [
+        textCell(participant.fullName),
+        textCell(getCertificateTypeLabel(participant.certificateType)),
+        textCell(certificate?.certificateNumber || ""),
+        textCell(getCertificateStatusLabel(certificate?.status)),
+      ];
+    }),
+  ];
+
+  await saveWorkbook(
+    data,
+    {
+      sheet: "เกียรติบัตร",
+      columns: [
+        { width: 38 },
+        { width: 24 },
+        { width: 24 },
+        { width: 20 },
+      ],
+      stickyRowsCount: 1,
+    },
+    `เกียรติบัตร-${sanitizeFileName(event?.name)}.xlsx`,
   );
 }
